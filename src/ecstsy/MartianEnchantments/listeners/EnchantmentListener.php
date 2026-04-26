@@ -23,7 +23,10 @@ use pocketmine\event\inventory\InventoryTransactionEvent;
 use pocketmine\event\Listener;
 use pocketmine\event\player\PlayerItemConsumeEvent;
 use pocketmine\event\player\PlayerItemHeldEvent;
+use pocketmine\event\player\PlayerItemUseEvent;
 use pocketmine\event\player\PlayerJoinEvent;
+use pocketmine\event\player\PlayerQuitEvent;
+use pocketmine\scheduler\ClosureTask;
 use pocketmine\inventory\ArmorInventory;
 use pocketmine\inventory\CallbackInventoryListener;
 use pocketmine\inventory\Inventory;
@@ -53,6 +56,10 @@ final class EnchantmentListener implements Listener {
             function (Inventory $inventory, int $slot, Item $oldItem): void {
                 if ($inventory instanceof ArmorInventory) {
                     $this->effectManager->onArmorSlotChange($inventory, $slot, $oldItem);
+                    $holder = $inventory->getHolder();
+                    if ($holder instanceof Player) {
+                        $this->queueEffectRefresh($holder);
+                    }
                 }
             },
             function (Inventory $inventory, array $oldContents): void {}
@@ -62,10 +69,24 @@ final class EnchantmentListener implements Listener {
             function (Inventory $inventory, int $slot, Item $oldItem): void {
                 if ($inventory instanceof PlayerInventory) {
                     $this->effectManager->onInventorySlotChange($inventory, $slot, $oldItem);
+                    $holder = $inventory->getHolder();
+                    if ($holder instanceof Player) {
+                        $this->queueEffectRefresh($holder);
+                    }
                 }
             },
             function (Inventory $inventory, array $oldContents): void {}
         ));
+
+        $this->queueEffectRefresh($player);
+    }
+
+    public function onPlayerQuit(PlayerQuitEvent $event): void {
+        $player = $event->getPlayer();
+
+        $this->effectManager->clearPlayerState($player);
+        EffectTracker::clearPlayerEffects($player);
+        CooldownManager::clearEntityCooldowns($player);
     }
 
     /**
@@ -93,6 +114,8 @@ final class EnchantmentListener implements Listener {
                 (new HeldTrigger())->execute($player, null, $newEnchantments, "HELD", []);
             }
         }
+
+        $this->queueEffectRefresh($player);
     }
 
     /**
@@ -111,6 +134,22 @@ final class EnchantmentListener implements Listener {
                 }
             }
         }
+
+        $this->queueEffectRefresh($player);
+    }
+
+    public function onPlayerItemUse(PlayerItemUseEvent $event): void {
+        $this->queueEffectRefresh($event->getPlayer());
+    }
+
+    private function queueEffectRefresh(Player $player): void {
+        $this->plugin->getScheduler()->scheduleDelayedTask(new ClosureTask(function () use ($player): void {
+            if (!$player->isOnline()) {
+                return;
+            }
+
+            $this->effectManager->refreshPlayerEffects($player);
+        }), 1);
     }
 
     /**
