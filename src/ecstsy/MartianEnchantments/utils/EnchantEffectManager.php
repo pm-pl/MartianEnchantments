@@ -15,6 +15,13 @@ use pocketmine\player\Player;
 final class EnchantEffectManager {
     use TriggerHelper;
 
+    /**
+     * Potion string keys (e.g. night_vision) this plugin last included in a sync.
+     *
+     * @var array<string, array<string, true>>
+     */
+    private static array $managedPotionKeysByPlayer = [];
+
     public function onArmorSlotChange(ArmorInventory $inventory, int $slot, Item $oldItem): void {
         $player = $inventory->getHolder();
         if (!$player instanceof Player) return;
@@ -22,8 +29,7 @@ final class EnchantEffectManager {
         $newItem = $inventory->getItem($slot);
         if ($newItem->equals($oldItem, false)) return;
 
-        $desired = $this->collectArmorDesired($player);
-        $this->syncPotionEffects($player, $desired);
+        $this->refreshPlayerEffects($player);
     }
 
     public function onInventorySlotChange(PlayerInventory $inventory, int $slot, Item $oldItem): void {
@@ -36,13 +42,29 @@ final class EnchantEffectManager {
         $newItem = $inventory->getItem($slot);
         if ($newItem->equals($oldItem, false)) return;
 
-        $desired = $this->collectHeldDesired($player, $newItem);
-        $this->syncPotionEffects($player, $desired);
+        $this->refreshPlayerEffects($player);
     }
 
     public function updateHeldItemEffects(Player $player, Item $oldItem, Item $newItem): void {
-        $desired = $this->collectHeldDesired($player, $newItem);
+        $this->refreshPlayerEffects($player);
+    }
+
+    public function refreshPlayerEffects(Player $player): void {
+        $desired = $this->collectArmorDesired($player);
+        $held = $player->getInventory()->getItemInHand();
+        $heldDesired = $this->collectHeldDesired($player, $held);
+
+        foreach ($heldDesired as $potionKey => $data) {
+            if (!isset($desired[$potionKey]) || $desired[$potionKey]['amp'] < $data['amp']) {
+                $desired[$potionKey] = $data;
+            }
+        }
+
         $this->syncPotionEffects($player, $desired);
+    }
+
+    public function clearPlayerState(Player $player): void {
+        unset(self::$managedPotionKeysByPlayer[$player->getName()]);
     }
 
     /**
@@ -140,19 +162,23 @@ final class EnchantEffectManager {
     }
 
     /**
-     * Sync player potion effects to exactly match $desired.
+     * Sync player potion effects to match $desired.
      *
-     * NOTE: This will remove any potion effects that are not in $desired.
-     * If you also have other plugins giving effects, I can add a tag/filter.
+     * Removes only potion keys the plugin was managing (previous sync) that are no longer wanted.
      */
     private function syncPotionEffects(Player $player, array $desired): void {
         $effects = $player->getEffects();
+        $playerName = $player->getName();
+        $parser = StringToEffectParser::getInstance();
+        $previouslyManaged = self::$managedPotionKeysByPlayer[$playerName] ?? [];
 
-        foreach ($effects->all() as $instance) {
-            $type = $instance->getType();
-            $key = strtolower($type->getName()->getText());
+        foreach (array_keys($previouslyManaged) as $potionKey) {
+            if (isset($desired[$potionKey])) {
+                continue;
+            }
 
-            if (!isset($desired[$key])) {
+            $type = $parser->parse($potionKey);
+            if ($type !== null) {
                 $effects->remove($type);
             }
         }
@@ -166,5 +192,7 @@ final class EnchantEffectManager {
                 $effects->add(new EffectInstance($effect, 2147483647, $amp, false));
             }
         }
+
+        self::$managedPotionKeysByPlayer[$playerName] = array_fill_keys(array_keys($desired), true);
     }
 }
