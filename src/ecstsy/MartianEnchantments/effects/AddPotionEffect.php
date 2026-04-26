@@ -28,8 +28,8 @@ class AddPotionEffect implements EffectInterface {
         $effect = new EffectInstance($potion, $duration, $amplifier);
 
         $enchantmentName = $extraData['enchant-name'] ?? 'unknown';
-        $level = $extraData['enchant-level'] ?? 1;
+        $slot = isset($extraData['slot']) ? (int) $extraData['slot'] : null;
 
-        EffectTracker::addEffect($target, $effect, $enchantmentName, $level);
+        EffectTracker::addEffect($target, $effect, $enchantmentName, $slot);
     }
 }
