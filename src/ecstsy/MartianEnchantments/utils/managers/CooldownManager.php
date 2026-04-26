@@ -54,4 +54,9 @@ class CooldownManager {
         $cooldownEnd = time() + $cooldown;
         self::$cooldowns[$entity->getId()][$enchantmentId] = $cooldownEnd;
     }
+
+    public static function clearEntityCooldowns(Entity $entity): void
+    {
+        unset(self::$cooldowns[$entity->getId()]);
+    }
 }
