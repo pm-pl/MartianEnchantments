@@ -2,7 +2,7 @@ name: MartianEnchantments
 main: ecstsy\MartianEnchantments\Loader
 api: 5.3.0
 version: 0.0.3-DEV
-author: ecstsylove
+author: dvrkarts
 description: A highly customizable enchantment system for PocketMine-MP
 softdepend:
   - DummyItemBlocks
