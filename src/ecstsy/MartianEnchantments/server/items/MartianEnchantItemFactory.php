@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ecstsy\MartianEnchantments\server\items;
 
 use ecstsy\MartianEnchantments\Loader;
-use ecstsy\MartianUtilities\utils\GeneralUtils;
+use ecstsy\MartianEnchantments\libs\ecstsy\MartianUtilities\utils\GeneralUtils;
 use pocketmine\item\Item;
 use pocketmine\item\StringToItemParser;
 use pocketmine\nbt\tag\CompoundTag;
@@ -27,6 +27,7 @@ final class MartianEnchantItemFactory {
         }
 
         $type = $itemCfg['type']
+            ?? $itemCfg['material']
             ?? $itemCfg['item']['type']
             ?? throw new \RuntimeException("Missing item type for '$key'");
 
@@ -63,6 +64,36 @@ final class MartianEnchantItemFactory {
         $root->setTag("MartianEnchantments", $tag);
 
         return $item;
+    }
+
+    /**
+     * Re-applies colored name/lore from config for a registry item (same placeholders as {@see create}), without overwriting NBT.
+     */
+    public static function refreshNameAndLore(string $registryKey, Item $item, array $args): void {
+        $cfg = GeneralUtils::getConfiguration(Loader::getInstance(), "config.yml");
+
+        $path = MartianItemRegistry::getConfigPath($registryKey);
+        $itemCfg = $cfg?->getNested($path);
+
+        if ($itemCfg === null || !\is_array($itemCfg)) {
+            return;
+        }
+
+        if (isset($itemCfg['name'])) {
+            $item->setCustomName(TextFormat::colorize(
+                self::format((string) $itemCfg['name'], $args)
+            ));
+        }
+
+        if (!empty($itemCfg['lore']) && \is_array($itemCfg['lore'])) {
+            $lore = [];
+            foreach ($itemCfg['lore'] as $line) {
+                $lore[] = TextFormat::colorize(
+                    self::format((string) $line, $args)
+                );
+            }
+            $item->setLore($lore);
+        }
     }
 
     private static function format(string $text, array $args): string {

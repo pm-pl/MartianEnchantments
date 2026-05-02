@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace ecstsy\MartianEnchantments\commands\subcommands;
 
-use CortexPE\Commando\args\RawStringArgument;
-use CortexPE\Commando\BaseSubCommand;
+use ecstsy\MartianEnchantments\commands\EnchantmentInfoPresenter;
+use ecstsy\MartianEnchantments\libs\CortexPE\Commando\args\RawStringArgument;
+use ecstsy\MartianEnchantments\libs\CortexPE\Commando\BaseSubCommand;
 use ecstsy\MartianEnchantments\enchantments\CustomEnchantment;
 use ecstsy\MartianEnchantments\enchantments\CustomEnchantments;
 use ecstsy\MartianEnchantments\Loader;
-use ecstsy\MartianUtilities\utils\GeneralUtils;
+use ecstsy\MartianEnchantments\libs\ecstsy\MartianUtilities\utils\PlayerUtils;
 use pocketmine\command\CommandSender;
-use pocketmine\item\enchantment\StringToEnchantmentParser;
 use pocketmine\player\Player;
 use pocketmine\utils\TextFormat as C;
 
@@ -23,46 +23,35 @@ final class InfoSubCommand extends BaseSubCommand {
         $this->registerArgument(0, new RawStringArgument("enchantment", true));
     }
 
-    public function onRun(CommandSender $sender, string $aliasUsed, array $args): void
-    {
+    public function onRun(CommandSender $sender, string $aliasUsed, array $args): void {
         if (!$sender instanceof Player) {
             $sender->sendMessage(C::colorize("&r&7In-game only."));
+
             return;
         }
 
-        $enchant = isset($args["enchantment"]) ? $args["enchantment"] : null;
+        $enchant = isset($args["enchantment"]) ? (string) $args["enchantment"] : '';
         $lang = Loader::getInstance()->getLanguageManager();
 
-        if ($enchant !== null) {
-            $enchantment = CustomEnchantments::getEnchantmentByName($enchant);
-            if ($enchantment instanceof CustomEnchantment) {
-                $infoMessages = $lang->getNested("commands.main");
-                
-                $enchantName = ucfirst($enchantment->getName());
-                $description = $enchantment->getDescription();  
-                $maxLevel = $enchantment->getMaxLevel();
+        if ($enchant === '') {
+            $sender->sendMessage(C::colorize((string) $lang->getNested("commands.invalid-usage", "&7Usage: /me info <enchantment>")));
 
-                $enchantConfig = GeneralUtils::getConfiguration(Loader::getInstance(), "enchantments.yml");
-                $enchantmentData = $enchantConfig->get(strtolower($enchantment->getName()), []);
-                $appliesTo = $enchantmentData['applies-to'] ?? ["Unknown"];
+            return;
+        }
 
-                foreach ($infoMessages['info'] as $message) {
-                    $message = str_replace(
-                        ['{enchant}', '{description}', '{applies}', '{max-level}'],
-                        [$enchantName, $description, $appliesTo, $maxLevel],
-                        $message
-                    );
-                    $sender->sendMessage(C::colorize($message));
-                }
-            } else {
-                $sender->sendMessage(C::colorize(str_replace("{enchant}", $enchant, $lang->getNested("commands.invalid-enchant"))));
-                return;
+        $enchantment = CustomEnchantments::getEnchantmentByName($enchant);
+        if ($enchantment instanceof CustomEnchantment) {
+            foreach (EnchantmentInfoPresenter::lines($enchantment) as $line) {
+                $sender->sendMessage(C::colorize($line));
             }
-        } 
+            PlayerUtils::playSound($sender, "random.orb");
+        } else {
+            $sender->sendMessage(C::colorize(str_replace("{enchant}", $enchant, (string) $lang->getNested("commands.invalid-enchant"))));
+            PlayerUtils::playSound($sender, "note.bass");
+        }
     }
 
-    public function getPermission(): string
-    {
+    public function getPermission(): string {
         return "martianenchantments.info";
     }
 }

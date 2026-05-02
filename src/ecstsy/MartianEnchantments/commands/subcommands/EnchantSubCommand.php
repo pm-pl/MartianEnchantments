@@ -11,9 +11,8 @@ use ecstsy\MartianEnchantments\enchantments\CustomEnchantment;
 use ecstsy\MartianEnchantments\enchantments\CustomEnchantmentManager;
 use ecstsy\MartianEnchantments\enchantments\CustomEnchantments;
 use ecstsy\MartianEnchantments\Loader;
+use ecstsy\MartianEnchantments\libs\ecstsy\MartianUtilities\utils\PlayerUtils;
 use pocketmine\command\CommandSender;
-use pocketmine\item\enchantment\EnchantmentInstance;
-use pocketmine\item\enchantment\StringToEnchantmentParser;
 use pocketmine\item\VanillaItems;
 use pocketmine\player\Player;
 use pocketmine\utils\TextFormat as C;
@@ -37,6 +36,7 @@ final class EnchantSubCommand extends BaseSubCommand {
 
         if (!isset($args["enchantment"]) || !isset($args["level"])) {
             $sender->sendMessage(C::colorize(str_replace("{usage}", $this->getUsage(), Loader::getInstance()->getLanguageManager()->getNested("commands.invalid-usage"))));
+            PlayerUtils::playSound($sender, "note.bass");
             return;
         }
 
@@ -47,11 +47,13 @@ final class EnchantSubCommand extends BaseSubCommand {
         $enchant = CustomEnchantments::getEnchantmentByName($enchantName) ?? null;
         if ($enchant === null || !($enchant instanceof CustomEnchantment)) {
             $sender->sendMessage(C::colorize(str_replace("{enchant}", $enchantName, Loader::getInstance()->getLanguageManager()->getNested("commands.invalid-enchant"))));
+            PlayerUtils::playSound($sender, "note.bass");
             return;
         }
     
         if ($item->getTypeId() === VanillaItems::AIR()->getTypeId()) {
             $sender->sendMessage(C::colorize(Loader::getInstance()->getLanguageManager()->getNested("commands.not-holding-item")));
+            PlayerUtils::playSound($sender, "note.bass");
             return;
         }
     
@@ -60,6 +62,7 @@ final class EnchantSubCommand extends BaseSubCommand {
             $levelsArray = range(1, $maxLevel);
             $levels = implode(", ", $levelsArray);
             $sender->sendMessage(C::colorize(str_replace("{levels}", $levels, Loader::getInstance()->getLanguageManager()->getNested("commands.invalid-level"))));
+            PlayerUtils::playSound($sender, "note.bass");
             return;
         }
 
@@ -81,6 +84,7 @@ final class EnchantSubCommand extends BaseSubCommand {
         }
     
         $sender->getInventory()->setItemInHand($item);
+        PlayerUtils::playSound($sender, "random.levelup");
     }
 
     public function getUsage(): string {

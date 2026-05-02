@@ -89,7 +89,7 @@ final class EnchantEffectManager {
                     continue;
                 }
 
-                $levelCfg = $enchant['config']['levels'][$level] ?? [];
+                $levelCfg = Utils::resolveLevelSlice((array) ($enchant['config']['levels'] ?? []), $level) ?? [];
                 foreach (($levelCfg['effects'] ?? []) as $effectData) {
                     if (($effectData['type'] ?? '') !== 'ADD_POTION') continue;
 
@@ -132,7 +132,7 @@ final class EnchantEffectManager {
                 continue;
             }
 
-            $levelCfg = $enchant['config']['levels'][$level] ?? [];
+            $levelCfg = Utils::resolveLevelSlice((array) ($enchant['config']['levels'] ?? []), $level) ?? [];
 
             foreach (($levelCfg['conditions'] ?? []) as $condition) {
                 $extra = [];

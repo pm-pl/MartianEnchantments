@@ -3,7 +3,7 @@
 namespace ecstsy\MartianEnchantments\effects;
 
 use ecstsy\MartianEnchantments\utils\EffectInterface;
-use ecstsy\MartianUtilities\utils\GeneralUtils;
+use ecstsy\MartianEnchantments\libs\ecstsy\MartianUtilities\utils\GeneralUtils;
 use pocketmine\entity\Entity;
 use pocketmine\player\Player;
 

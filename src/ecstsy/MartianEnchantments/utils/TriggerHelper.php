@@ -2,6 +2,8 @@
 
 namespace ecstsy\MartianEnchantments\utils;
 
+use ecstsy\MartianEnchantments\utils\EffectChainState;
+use ecstsy\MartianEnchantments\utils\EffectInterface;
 use ecstsy\MartianEnchantments\utils\managers\CooldownManager;
 use ecstsy\MartianEnchantments\utils\managers\EffectManager;
 use ecstsy\MartianEnchantments\utils\registries\ConditionRegistry;
@@ -10,7 +12,7 @@ use pocketmine\player\Player;
 
 trait TriggerHelper {
 
-    public function handleConditions(array $condition, Entity $attacker, ?Entity $victim, string $context, array $extraData = []): bool {
+    public function handleConditions(array $condition, Entity $attacker, ?Entity $victim, string $context, array &$extraData): bool {
         $target = $condition['target'] === 'victim' ? $victim : $attacker;
     
         if (!$target instanceof Player) {
@@ -72,7 +74,8 @@ trait TriggerHelper {
      * @param Entity|null         $target          The entity to apply the effect to.
      * @param string              $triggerContext  The context of the effect trigger.
      * @param array               $additionalData  Additional data to pass to the effect.
-     * @param int                 $effectChance    Chance for the effect to trigger. (Default: 100)
+     * @param int                 $effectChance    Activation chance for the entire effect chain (default: 100).
+     *                                                Rolled once per proc — not independently per effect row.
      * @param string              $enchantmentId   The ID of the enchantment that triggered the effect.
      * @param bool                $forceMode       Force mode for the effect.
      *
@@ -84,27 +87,46 @@ trait TriggerHelper {
         if (!$forceMode && $caster instanceof Player && CooldownManager::isOnCooldown($caster, $enchantmentId)) {
             return; 
         }
-    
-        foreach ($effects['effects'] as $effectConfig) {
-            $effectType = strtolower($effectConfig['type'] ?? '');
+
+        $effectsList = (array) ($effects['effects'] ?? []);
+        if ($effectsList === []) {
+            return;
+        }
+
+        if (!$forceMode && $effectChance > 0 && $effectChance < 100) {
+            if (mt_rand(1, 100) > $effectChance) {
+                return;
+            }
+        }
+
+        EffectChainState::reset();
+
+        foreach ($effectsList as $effectConfig) {
+            if (EffectChainState::isAborted()) {
+                break;
+            }
+            if (!is_array($effectConfig)) {
+                continue;
+            }
+
+            $effectType = strtolower((string) ($effectConfig['type'] ?? ''));
             $effectClass = EffectManager::getEffectClass($effectType);
 
-            if ($effectClass && class_exists($effectClass)) {
-                if (!$forceMode && $effectChance > 0) {
-                    $randomRoll = mt_rand(1, 100);
-                    if ($randomRoll > $effectChance) {
-                        continue; 
-                    }
-                }
-    
-                /** @var EffectInterface $effect */
-                $effect = new $effectClass();
-                $effect->apply($caster, $target, $effectConfig, $effectConfig, $triggerContext, $additionalData);
-    
-                if (!$forceMode && $effectCooldown > 0 && $caster instanceof Player) {
-                    CooldownManager::setCooldown($caster, $enchantmentId, $effectCooldown);
-                }
+            if (!$effectClass || !class_exists($effectClass)) {
+                continue;
             }
+
+            /** @var EffectInterface $effect */
+            $effect = new $effectClass();
+            $effect->apply($caster, $target, $effectConfig, $effectConfig, $triggerContext, $additionalData);
+
+            if (EffectChainState::isAborted()) {
+                break;
+            }
+        }
+
+        if (!EffectChainState::isAborted() && !$forceMode && $effectCooldown > 0 && $caster instanceof Player) {
+            CooldownManager::setCooldown($caster, $enchantmentId, $effectCooldown);
         }
     }
 }

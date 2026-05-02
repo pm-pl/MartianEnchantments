@@ -18,6 +18,8 @@ final class MartianEnchantItems {
         $success = $forcedSuccessChance !== null ? $forcedSuccessChance : mt_rand(1, 100);
         $destroy = $forcedDestroyChance !== null ? $forcedDestroyChance : mt_rand(1, 100);
 
+        $groupKey = Groups::getGroupNameById($enchantment->getRarity()) ?? Groups::getFallbackGroup();
+
         return MartianEnchantItemFactory::create('enchantment-book', [
             'enchantment' => CustomEnchantments::getEnchantmentDisplayName($enchantment->getName(), C::colorize(Groups::translateGroupToColor($enchantment->getRarity()))),
             'enchant-no-color' => ucfirst($enchantment->getName()),
@@ -28,6 +30,7 @@ final class MartianEnchantItems {
             'description' => $enchantment->getDescription(),
             'group-color' => C::colorize(Groups::translateGroupToColor($enchantment->getRarity())),
             'applies-to' => implode(", ", $appliesTo),
+            'group' => $groupKey,
         ]);
     }
 
@@ -41,33 +44,46 @@ final class MartianEnchantItems {
         ]);
     }
 
-    public static function randomizationScroll(string $groupName, string $groupColor): Item {
+    public static function randomizationScroll(string $groupName, string $groupColor, string $groupKey): Item {
         return MartianEnchantItemFactory::create('randomization-scroll', [
             'group-name' => $groupName,
-            'group-color' => $groupColor
+            'group-color' => $groupColor,
+            'group' => $groupKey,
         ]);
     }
 
-    public static function secretDust(string $groupName, string $groupColor): Item {
+    public static function secretDust(string $groupName, string $groupColor, string $groupKey): Item {
         return MartianEnchantItemFactory::create('secret-dust', [
             'group-name' => $groupName,
-            'group-color' => $groupColor
+            'group-color' => $groupColor,
+            'group' => $groupKey,
         ]);
     }
 
-    public static function mysteryDust(string $groupName, string $groupColor, int $percent): Item {
+    public static function mysteryDust(string $groupName, string $groupColor, int $percent, string $groupKey): Item {
         return MartianEnchantItemFactory::create('mystery-dust', [
             'group-name' => $groupName,
             'group-color' => $groupColor,
-            'percent' => $percent
+            'percent' => $percent,
+            'group' => $groupKey,
         ]);
     }
 
-    public static function slotIncreaser(string $groupName, string $groupColor, int $count): Item {
+    public static function magicDust(string $groupName, string $groupColor, int $percent, string $groupKey): Item {
+        return MartianEnchantItemFactory::create('magic-dust', [
+            'group-name' => $groupName,
+            'group-color' => $groupColor,
+            'percent' => $percent,
+            'group' => $groupKey,
+        ]);
+    }
+
+    public static function slotIncreaser(string $groupName, string $groupColor, int $count, string $groupKey): Item {
         return MartianEnchantItemFactory::create('slot-increaser', [
             'group-name' => $groupName,
             'group-color' => $groupColor,
-            'count' => $count
+            'count' => $count,
+            'group' => $groupKey,
         ]);
     }
 

@@ -10,12 +10,23 @@ use ecstsy\MartianEnchantments\enchantments\Groups;
 use ecstsy\MartianEnchantments\libs\ecstsy\MartianUtilities\utils\GeneralUtils;
 use ecstsy\MartianEnchantments\libs\ecstsy\MartianUtilities\utils\PlayerUtils;
 use ecstsy\MartianEnchantments\Loader;
+
+use ecstsy\MartianEnchantments\utils\EnchantApplyGate;
+use ecstsy\MartianEnchantments\utils\EnchanterBookOpenHelper;
+use ecstsy\MartianEnchantments\utils\ItemApplyHelper;
+use pocketmine\entity\object\FireworkRocket;
 use pocketmine\event\block\BlockPlaceEvent;
+use pocketmine\event\entity\EntityDamageByEntityEvent;
+
 use pocketmine\event\inventory\InventoryTransactionEvent;
 use pocketmine\event\Listener;
 use pocketmine\event\player\PlayerItemUseEvent;
 use pocketmine\inventory\transaction\action\SlotChangeAction;
 use pocketmine\item\VanillaItems;
+
+use pocketmine\player\Player;
+use pocketmine\utils\Config;
+
 use pocketmine\utils\TextFormat as C;
 
 final class ItemListener implements Listener {
@@ -34,60 +45,72 @@ final class ItemListener implements Listener {
     public function onPlayerItemUse(PlayerItemUseEvent $event): void {
         $player = $event->getPlayer();
         $item = $event->getItem();
-        $namedTag = $item->getNamedTag();
-        $tag = $namedTag->getCompoundTag("MartianEnchantments");
-        $language = Loader::getInstance()->getLanguageManager();
 
-        if ($tag === null) return;
+        $tag = $item->getNamedTag()->getCompoundTag("MartianEnchantments");
+        if ($tag === null) {
+            return;
+        }
 
-        if (!$tag->getTag("martianItem")) return;
+        if ($tag->getTag("martianItem") === null) {
+            return;
+        }
 
-        switch($tag->getString("martianItem")) {
-            case "enchantment-book":
-                $event->cancel();
-                $enchant = strtolower($tag->getString("enchant-no-color", ""));
-                $enchantment = CustomEnchantments::getEnchantmentByName($enchant);
+        $martianId = $tag->getString("martianItem");
 
-                if ($enchantment === null) {
-                    $player->sendMessage(C::colorize("&r&cUnknown enchantment!"));
-                    return;
-                }
+        if ($martianId === "enchanter-book") {
+            $event->cancel();
+            EnchanterBookOpenHelper::tryOpen($player, $item);
 
-                $level = $tag->getInt("level") ?: null;
+            return;
+        }
 
-                if ($level === null) {
-                    $player->sendMessage(C::colorize("&r&cInvalid level!"));
-                    return;
-                }
+        if ($martianId !== "enchantment-book") {
+            return;
+        }
 
-                $header = $language->getNested("interact.enchantment-book.header");
-                if ($header !== null) {
-                    $player->sendMessage(C::colorize($header));
-                }
+        $event->cancel();
+        $lang = Loader::getInstance()->getLanguageManager();
 
-                $lines = (array)$language->getNested("interact.enchantment-book.lines", []);
+        $enchant = strtolower($tag->getString("enchant-no-color", ""));
+        $enchantment = CustomEnchantments::getEnchantmentByName($enchant);
 
-                $replacements = [
-                    "{enchant}" => CustomEnchantments::getEnchantmentDisplayName(
-                        $enchantment->getName(),
-                        Groups::translateGroupToColor($enchantment->getRarity())
-                    ),
-                    "{applies}" => implode(", ", $enchantment->getApplicableItems()),
-                    "{max-level}" => $enchantment->getMaxLevel(),
-                    "{roman-level}" => GeneralUtils::getRomanNumeral($enchantment->getMaxLevel()),
-                    "{description}" => $enchantment->getDescription()
-                ];
+        if ($enchantment === null) {
+            $player->sendMessage(C::colorize((string) $lang->getNested("interact.enchantment-book.unknown-enchant")));
+            return;
+        }
 
-                foreach ($lines as $line) {
-                    $player->sendMessage(C::colorize(str_replace(
-                        array_keys($replacements),
-                        array_values($replacements),
-                        $line
-                    )));
-                }
-                break;
-            default:
-                break;
+        $level = $tag->getInt("level", 0);
+        if ($level < 1) {
+            $player->sendMessage(C::colorize((string) $lang->getNested("interact.enchantment-book.invalid-level")));
+            return;
+        }
+
+        $header = $lang->getNested("interact.enchantment-book.header");
+        if (is_string($header) && $header !== "" && !str_starts_with($header, "Translation not found:")) {
+            $player->sendMessage(C::colorize($header));
+        }
+
+        $rawLines = $lang->getNested("interact.enchantment-book.lines");
+        $lines = is_array($rawLines) ? $rawLines : [];
+
+        $replacements = [
+            "{enchant}" => CustomEnchantments::getEnchantmentDisplayName(
+                $enchantment->getName(),
+                Groups::translateGroupToColor($enchantment->getRarity())
+            ),
+            "{applies}" => implode(", ", $enchantment->getApplicableItems()),
+            "{max-level}" => (string) $enchantment->getMaxLevel(),
+            "{roman-level}" => GeneralUtils::getRomanNumeral($enchantment->getMaxLevel()),
+            "{description}" => $enchantment->getDescription()
+        ];
+
+        foreach ($lines as $line) {
+            $player->sendMessage(C::colorize(str_replace(
+                array_keys($replacements),
+                array_values($replacements),
+                (string) $line
+            )));
+
         }
     }
 
@@ -101,9 +124,19 @@ final class ItemListener implements Listener {
 
         $loader = Loader::getInstance();
         $config = GeneralUtils::getConfiguration($loader, "config.yml");
-        $language = $loader->getLanguageManager();
 
-        if (!$config->getNested("settings.enchantment-book.drag-drop-application", true)) {
+        if (!($config instanceof Config)) {
+            return;
+        }
+
+        $language = $loader->getLanguageManager();
+        $source = $transaction->getSource();
+        if ($source instanceof Player && ItemApplyHelper::tryProcess($event, $source, $actions, $config, $language)) {
+            return;
+        }
+
+        if (!(bool) $config->getNested("settings.enchantment-book.drag-drop-application", true)) {
+
             return;
         }
 
@@ -113,7 +146,11 @@ final class ItemListener implements Listener {
         $item = null;
 
         foreach ($actions as $action) {
-            if (!$action instanceof SlotChangeAction) continue;
+
+            if (!$action instanceof SlotChangeAction) {
+                continue;
+            }
+
 
             $source = $action->getSourceItem();
             $tag = $source->getNamedTag()->getCompoundTag("MartianEnchantments");
@@ -134,25 +171,47 @@ final class ItemListener implements Listener {
         $event->cancel();
         $player = $transaction->getSource();
 
+        if (!$player instanceof Player) {
+            return;
+        }
+
+
         $enchantKey = strtolower($bookTag->getString("enchant-no-color", ""));
         $level = $bookTag->getInt("level", 0);
         $success = $bookTag->getInt("success", 100);
         $destroy = $bookTag->getInt("destroy", 0);
 
-        if ($enchantKey === "" || $level <= 0) {
-            $player->sendMessage(C::colorize($language->getNested("commands.enchantment-not-found")));
+
+        if ($enchantKey === "" || $level < 1) {
+            $player->sendMessage(C::colorize((string) $language->getNested("commands.enchantment-not-found")));
+            self::playApplyFailSound($player, $config);
+
+
             return;
         }
 
         $enchantment = CustomEnchantments::getEnchantmentByName($enchantKey);
         if ($enchantment === null) {
-            $player->sendMessage(C::colorize(str_replace("{enchant}", $enchantKey, $language->getNested("commands.enchantment-not-found"))));
+
+            $player->sendMessage(C::colorize(str_replace(
+                "{enchant}",
+                $enchantKey,
+                (string) $language->getNested("commands.enchantment-not-found")
+            )));
+            self::playApplyFailSound($player, $config);
+
             return;
         }
 
-        $limEnabled = $config->getNested("settings.enchantLimitation.enabled", true);
-        
-        if ($limEnabled) {
+        if (!EnchantApplyGate::passesGlobalGearAllowlist($item)) {
+            $player->sendMessage(C::colorize((string) $language->getNested("applying.gear-not-whitelisted")));
+            self::playApplyFailSound($player, $config);
+
+            return;
+        }
+
+        if ((bool) $config->getNested("settings.enchantLimitation.enabled", true)) {
+
             $limLore = (string) $config->getNested("settings.enchantLimitation.lore", "");
             $limNbtKey = (string) $config->getNested("settings.enchantLimitation.NBT-tag", "unmodifiable");
 
@@ -174,7 +233,11 @@ final class ItemListener implements Listener {
             }
 
             if ($blocked) {
-                $player->sendMessage(C::colorize($language->getNested("enchant-limitations.cannot-be-modified")));
+
+                $player->sendMessage(C::colorize((string) $language->getNested("enchant-limitations.cannot-be-modified")));
+                self::playApplyFailSound($player, $config);
+
+
                 return;
             }
         }
@@ -184,28 +247,37 @@ final class ItemListener implements Listener {
 
         $currentEnchants = CustomEnchantmentManager::getEnchantments($item);
 
-        $combiningEnabled = $config->getNested("settings.combining.enabled", false);
-        $upgradeEnabled = $config->getNested("settings.combining.chances.upgrade", true);
-        $useChances = $config->getNested("settings.combining.chances.use-chances", true);
+        $combiningEnabled = (bool) $config->getNested("settings.combining.enabled", false);
+        $upgradeEnabled = (bool) $config->getNested("settings.combining.chances.upgrade", true);
+        $useChances = (bool) $config->getNested("settings.combining.chances.use-chances", true);
 
         $existingLevel = $currentEnchants[$enchantKey] ?? 0;
 
-        /** =====================
-         *  COMBINING / UPGRADING
-         *  ===================== */
+        /** Combining / upgrade path */
         if ($existingLevel > 0) {
             if (!$combiningEnabled) {
-                $player->sendMessage(C::colorize($language->getNested("applying.already-applied")));
+                $player->sendMessage(C::colorize((string) $language->getNested("applying.already-applied")));
+                self::playApplyFailSound($player, $config);
+
+
                 return;
             }
 
             if (!$upgradeEnabled) {
-                $player->sendMessage(C::colorize($language->getNested("combining.something-went-wrong")));
+
+                $player->sendMessage(C::colorize((string) $language->getNested("combining.something-went-wrong")));
+                self::playApplyFailSound($player, $config);
+
+
                 return;
             }
 
             if ($existingLevel >= $enchantment->getMaxLevel()) {
-                $player->sendMessage(C::colorize($language->getNested("combining.already-max-level")));
+
+                $player->sendMessage(C::colorize((string) $language->getNested("combining.already-max-level")));
+                self::playApplyFailSound($player, $config);
+
+
                 return;
             }
 
@@ -215,10 +287,14 @@ final class ItemListener implements Listener {
                         str_replace(
                             ["{enchant}", "{level}"],
                             [$enchantment->getName(), GeneralUtils::getRomanNumeral($existingLevel)],
-                            $language->getNested("combining.requires-same-level")
+
+                            (string) $language->getNested("combining.requires-same-level")
                         )
                     )
                 );
+                self::playApplyFailSound($player, $config);
+
+
                 return;
             }
 
@@ -227,36 +303,50 @@ final class ItemListener implements Listener {
             if (!$useChances || mt_rand(1, 100) <= $success) {
                 CustomEnchantmentManager::applyEnchantment($item, $enchantment, $targetLevel);
 
-                PlayerUtils::playSound($player, $config->getNested("settings.applying.cosmetics.applied.sound", "random.levelup"));
+                ItemApplyHelper::refreshTransmogDisplayName($item, $config);
+
+                self::playApplySuccessSound($player, $config);
+
 
                 $bookAction->getInventory()->setItem($bookAction->getSlot(), VanillaItems::AIR());
                 $itemAction->getInventory()->setItem($itemAction->getSlot(), $item);
 
-                $player->sendMessage(C::colorize(str_replace(["{enchant}", "{level}"], [
-                    CustomEnchantments::getEnchantmentDisplayName($enchantment->getName(), Groups::translateGroupToColor($enchantment->getRarity())),
-                    GeneralUtils::getRomanNumeral($targetLevel)
-                ], $language->getNested("combining.success"))));
+                $player->sendMessage(C::colorize(str_replace(
+                    ["{enchant}", "{level}"],
+                    [
+                        CustomEnchantments::getEnchantmentDisplayName(
+                            $enchantment->getName(),
+                            Groups::translateGroupToColor($enchantment->getRarity())
+                        ),
+                        GeneralUtils::getRomanNumeral($targetLevel)
+                    ],
+                    (string) $language->getNested("combining.success")
+                )));
+
                 return;
             }
 
-            PlayerUtils::playSound($player, $config->getNested("settings.applying.cosmetics.failed.sound", "random.anvil.break"));
-
+            self::playApplyFailSound($player, $config);
             $bookAction->getInventory()->setItem($bookAction->getSlot(), VanillaItems::AIR());
-            $player->sendMessage(C::colorize($language->getNested("combining.failure")));
+            $player->sendMessage(C::colorize((string) $language->getNested("combining.failure")));
+
             return;
         }
 
-        /** =====================
-         *  NORMAL APPLICATION
-         *  ===================== */
+        /** First-time application */
         $enchCfg = GeneralUtils::getConfiguration(Loader::getInstance(), "enchantments.yml");
+        if ($enchCfg === null) {
+            $player->sendMessage(C::colorize((string) $language->getNested("commands.enchantment-not-found")));
+            self::playApplyFailSound($player, $config);
 
-        $enchKeyLower = $enchantKey; 
-        $enchData = $enchCfg->get($enchKeyLower);
+            return;
+        }
 
+        $enchData = $enchCfg->get($enchantKey);
         if (!is_array($enchData)) {
             foreach ($enchCfg->getAll() as $k => $v) {
-                if (strtolower((string)$k) === $enchKeyLower) {
+                if (strtolower((string) $k) === $enchantKey) {
+
                     $enchData = is_array($v) ? $v : null;
                     break;
                 }
@@ -264,17 +354,29 @@ final class ItemListener implements Listener {
         }
 
         $settings = is_array($enchData) ? ($enchData["settings"] ?? []) : [];
-        $required = array_map("strtolower", (array)($settings["required-enchants"] ?? []));
-        $blockedWith = array_map("strtolower", (array)($settings["not-applyable-with"] ?? []));
+
+        $required = array_map("strtolower", (array) ($settings["required-enchants"] ?? []));
+        $blockedWith = array_map("strtolower", (array) ($settings["not-applyable-with"] ?? []));
+
 
         $currentKeys = array_map("strtolower", array_keys($currentEnchants));
 
         if ($required !== []) {
             foreach ($required as $req) {
-                if ($req === "") continue;
+
+                if ($req === "") {
+                    continue;
+                }
 
                 if (!in_array($req, $currentKeys, true)) {
-                    $player->sendMessage(C::colorize(str_replace(["{enchant1}", "{enchant2}"], [$enchantment->getName(), $req], $language->getNested("applying.requires-enchant"))));
+                    $player->sendMessage(C::colorize(str_replace(
+                        ["{enchant1}", "{enchant2}"],
+                        [$enchantment->getName(), $req],
+                        (string) $language->getNested("applying.requires-enchant")
+                    )));
+                    self::playApplyFailSound($player, $config);
+
+
                     return;
                 }
             }
@@ -282,22 +384,40 @@ final class ItemListener implements Listener {
 
         if ($blockedWith !== []) {
             foreach ($blockedWith as $blocked) {
-                if ($blocked === "") continue;
+
+                if ($blocked === "") {
+                    continue;
+                }
 
                 if (in_array($blocked, $currentKeys, true)) {
-                    $player->sendMessage(C::colorize(str_replace(["{enchant1}", "{enchant2}"], [$enchantment->getName(), $blocked], $language->getNested("applying.not-applicable-with"))));
+                    $player->sendMessage(C::colorize(str_replace(
+                        ["{enchant1}", "{enchant2}"],
+                        [$enchantment->getName(), $blocked],
+                        (string) $language->getNested("applying.not-applicable-with")
+                    )));
+                    self::playApplyFailSound($player, $config);
+
+
                     return;
                 }
             }
         }
 
         if (count($currentEnchants) >= $maxSlots) {
-            $player->sendMessage(C::colorize($language->getNested("slots.limit-reached")));
+
+            $player->sendMessage(C::colorize((string) $language->getNested("slots.limit-reached")));
+            self::playApplyFailSound($player, $config);
+
+
             return;
         }
 
         if (!$enchantment->matches($item)) {
-            $player->sendMessage(C::colorize($language->getNested("applying.wrong-material")));
+
+            $player->sendMessage(C::colorize((string) $language->getNested("applying.wrong-material")));
+            self::playApplyFailSound($player, $config);
+
+
             return;
         }
 
@@ -305,24 +425,127 @@ final class ItemListener implements Listener {
             $newLevel = min($level, $enchantment->getMaxLevel());
             CustomEnchantmentManager::applyEnchantment($item, $enchantment, $newLevel);
 
-            PlayerUtils::playSound($player, $config->getNested("settings.applying.cosmetics.applied.sound", "random.levelup"));
+            ItemApplyHelper::refreshTransmogDisplayName($item, $config);
 
-            $player->sendMessage(C::colorize($language->getNested("applying.applied")));
+            self::playApplySuccessSound($player, $config);
+            $player->sendMessage(C::colorize((string) $language->getNested("applying.applied")));
 
             $bookAction->getInventory()->setItem($bookAction->getSlot(), VanillaItems::AIR());
             $itemAction->getInventory()->setItem($itemAction->getSlot(), $item);
+
+
             return;
         }
 
         if (mt_rand(1, 100) <= $destroy) {
+
+            if (ItemApplyHelper::hasWhiteScrollProtection($item)) {
+                ItemApplyHelper::clearWhiteScrollProtection($item);
+                $bookAction->getInventory()->setItem($bookAction->getSlot(), VanillaItems::AIR());
+                $itemAction->getInventory()->setItem($itemAction->getSlot(), $item);
+                $player->sendMessage(C::colorize((string) $language->getNested("items.white-scroll.item-saved")));
+                self::playApplyFailSound($player, $config);
+                return;
+            }
+            if (ItemApplyHelper::hasHolyWhiteScrollProtection($item)) {
+                ItemApplyHelper::clearHolyWhiteScrollProtection($item);
+                $bookAction->getInventory()->setItem($bookAction->getSlot(), VanillaItems::AIR());
+                $itemAction->getInventory()->setItem($itemAction->getSlot(), $item);
+                $holy = $language->getNested("items.holywhitescroll.item-saved");
+                $msg = is_string($holy) && $holy !== "" && !str_starts_with($holy, "Translation not found:")
+                    ? $holy
+                    : (string) $language->getNested("items.white-scroll.item-saved");
+                $player->sendMessage(C::colorize($msg));
+                self::playApplyFailSound($player, $config);
+                return;
+            }
             $itemAction->getInventory()->setItem($itemAction->getSlot(), VanillaItems::AIR());
             $bookAction->getInventory()->setItem($bookAction->getSlot(), VanillaItems::AIR());
+            $player->sendMessage(C::colorize((string) $language->getNested("destroy.book-failed")));
+            self::playDestroySound($player, $config);
 
-            $player->sendMessage(C::colorize($language->getNested("destroy.book-failed")));
+
             return;
         }
 
         $bookAction->getInventory()->setItem($bookAction->getSlot(), VanillaItems::AIR());
-        $player->sendMessage(C::colorize($language->getNested("chances.book-failed")));
+
+        $player->sendMessage(C::colorize((string) $language->getNested("chances.book-failed")));
+        self::playApplyFailSound($player, $config);
+    }
+
+    private static function playApplySuccessSound(Player $player, Config $config): void {
+        $sound = (string) $config->getNested("settings.applying.cosmetics.applied.sound", "random.levelup");
+        PlayerUtils::playSound($player, $sound);
+    }
+
+    private static function playApplyFailSound(Player $player, Config $config): void {
+        $sound = (string) $config->getNested("settings.applying.cosmetics.failed.sound", "random.anvil_break");
+        PlayerUtils::playSound($player, $sound);
+    }
+
+    /**
+     * Stronger feedback when the item is destroyed (configurable; defaults to fail sound if unset).
+     */
+    private static function playDestroySound(Player $player, Config $config): void {
+        $fallback = (string) $config->getNested("settings.applying.cosmetics.failed.sound", "random.anvil_break");
+        $sound = (string) $config->getNested("settings.applying.cosmetics.destroy.sound", $fallback);
+        PlayerUtils::playSound($player, $sound);
+    }
+
+    /**
+     * Keeps transmog display suffix in sync when inventory contents change (runs after drag-drop handling).
+     *
+     * @priority MONITOR
+     */
+    public function onInventoryTransactionTransmog(InventoryTransactionEvent $event): void {
+        $cfg = GeneralUtils::getConfiguration(Loader::getInstance(), "config.yml");
+        if (!($cfg instanceof Config)) {
+            return;
+        }
+
+        foreach ($event->getTransaction()->getActions() as $action) {
+            if (!$action instanceof SlotChangeAction) {
+                continue;
+            }
+
+            $target = $action->getTargetItem();
+            if ($target->isNull()) {
+                continue;
+            }
+
+            $before = $target->getCustomName();
+            if (!ItemApplyHelper::refreshTransmogDisplayName($target, $cfg)) {
+                continue;
+            }
+
+            if ($target->getCustomName() !== $before) {
+                $action->getInventory()->setItem($action->getSlot(), $target);
+            }
+        }
+    }
+
+    /**
+     * Cancels damage to players from cosmetic {@see FireworkRocket} entities (enchanter-book fireworks).
+     */
+    public function onCosmeticFireworkDamage(EntityDamageByEntityEvent $event): void {
+        $cfg = GeneralUtils::getConfiguration(Loader::getInstance(), "config.yml");
+        if (!($cfg instanceof Config)) {
+            return;
+        }
+
+        if (!(bool) $cfg->getNested("settings.enchanter-books.cancel-firework-damage", true)) {
+            return;
+        }
+
+        $entity = $event->getEntity();
+        if (!$entity instanceof Player) {
+            return;
+        }
+
+        if ($event->getDamager() instanceof FireworkRocket) {
+            $event->cancel();
+        }
+
     }
 }

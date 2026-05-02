@@ -6,12 +6,14 @@ namespace ecstsy\MartianEnchantments\listeners;
 
 use ecstsy\MartianEnchantments\triggers\GenericTrigger;
 use ecstsy\MartianEnchantments\triggers\HeldTrigger;
+use ecstsy\MartianEnchantments\utils\NumericExpr;
 use ecstsy\MartianEnchantments\utils\TriggerHelper;
 use ecstsy\MartianEnchantments\utils\Utils;
 use ecstsy\MartianEnchantments\libs\ecstsy\MartianUtilities\utils\GeneralUtils;
 use ecstsy\MartianEnchantments\utils\EffectTracker;
 use ecstsy\MartianEnchantments\utils\EnchantEffectManager;
 use ecstsy\MartianEnchantments\utils\managers\CooldownManager;
+use ecstsy\MartianEnchantments\utils\managers\EnchantmentDisableManager;
 use pocketmine\entity\Living;
 use pocketmine\entity\projectile\Arrow;
 use pocketmine\entity\projectile\Projectile;
@@ -47,6 +49,19 @@ final class EnchantmentListener implements Listener {
     {
         $this->plugin = $plugin;
         $this->effectManager = new EnchantEffectManager();
+    }
+
+    /**
+     * @param array{name?: string, level?: int, config: array<string, mixed>, applies_to?: mixed} $enchRow
+     */
+    private static function listHasTrigger(array $enchRow, string $triggerUppercase): bool {
+        foreach ((array) ($enchRow['config']['type'] ?? []) as $t) {
+            if (\strtoupper((string) $t) === $triggerUppercase) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function onPlayerJoin(PlayerJoinEvent $event): void {
@@ -87,6 +102,7 @@ final class EnchantmentListener implements Listener {
         $this->effectManager->clearPlayerState($player);
         EffectTracker::clearPlayerEffects($player);
         CooldownManager::clearEntityCooldowns($player);
+        EnchantmentDisableManager::clearPlayer($player->getName());
     }
 
     /**
@@ -174,30 +190,15 @@ final class EnchantmentListener implements Listener {
             return;
         }
     
-        $filteredEnchantments = []; 
-        foreach ($enchantments as $enchantmentConfig) {
-            $contextType = $enchantmentConfig['config']['type'] ?? [];
-    
-            if (!in_array("ATTACK", $contextType, true)) {
-                continue; 
+        $filtered = [];
+        foreach ($enchantments as $cfg) {
+            if (self::listHasTrigger($cfg, 'ATTACK')) {
+                $filtered[] = $cfg;
             }
-    
-            $level = $enchantmentConfig['level'] ?? 1;
-            $chance = $enchantmentConfig['config']['levels'][$level]['chance'] ?? 100;
-            $enchantName = $enchantmentConfig['name'] ?? 'unknown';
-    
-            $extraData = [
-                'enchant-level' => $level, 
-                'chance' => $chance,
-                'enchant-name' => $enchantName
-            ];
-     
-            $filteredEnchantments[] = $enchantmentConfig; 
         }
-    
-        if (!empty($filteredEnchantments)) {
-            $trigger = new GenericTrigger();
-            $trigger->execute($attacker, $victim, $filteredEnchantments, 'ATTACK', $extraData);
+
+        if ($filtered !== []) {
+            (new GenericTrigger())->execute($attacker, $victim, $filtered, 'ATTACK', []);
         }
     }
 
@@ -223,30 +224,15 @@ final class EnchantmentListener implements Listener {
             return;
         }
         
-        $filteredEnchantments = []; 
-        foreach ($enchantments as $enchantmentConfig) {
-            $contextType = $enchantmentConfig['config']['type'] ?? [];
-    
-            if (!in_array("ATTACK_MOB", $contextType, true)) {
-                continue; 
+        $filtered = [];
+        foreach ($enchantments as $cfg) {
+            if (self::listHasTrigger($cfg, 'ATTACK_MOB')) {
+                $filtered[] = $cfg;
             }
-    
-            $level = $enchantmentConfig['level'] ?? 1;
-            $chance = $enchantmentConfig['config']['levels'][$level]['chance'] ?? 100;
-            $enchantName = $enchantmentConfig['name'] ?? 'unknown';
-    
-            $extraData = [
-                'enchant-level' => $level,
-                'chance'        => $chance,
-                'enchant-name'  => $enchantName,
-            ];
-    
-            $filteredEnchantments[] = $enchantmentConfig; 
         }
-    
-        if (!empty($filteredEnchantments)) {
-            $trigger = new GenericTrigger();
-            $trigger->execute($attacker, $victim, $filteredEnchantments, 'ATTACK_MOB', $extraData);
+
+        if ($filtered !== []) {
+            (new GenericTrigger())->execute($attacker, $victim, $filtered, 'ATTACK_MOB', []);
         }
     }
     
@@ -272,30 +258,15 @@ final class EnchantmentListener implements Listener {
             return;
         }
 
-        $filteredEnchantments = [];
-        foreach ($enchantments as $enchantmentConfig) {
-            $contextType = $enchantmentConfig['config']['type'] ?? [];
-    
-            if (!in_array("DEFENSE", $contextType, true)) {
-                continue; 
+        $filtered = [];
+        foreach ($enchantments as $cfg) {
+            if (self::listHasTrigger($cfg, 'DEFENSE')) {
+                $filtered[] = $cfg;
             }
-    
-            $level = $enchantmentConfig['level'] ?? 1;
-            $chance = $enchantmentConfig['config']['levels'][$level]['chance'] ?? 100;
-            $enchantName = $enchantmentConfig['name'] ?? 'unknown';
-    
-            $extraData = [
-                'enchant-level' => $level,
-                'chance'        => $chance,
-                'enchant-name'  => $enchantName
-            ];
-    
-            $filteredEnchantments[] = $enchantmentConfig;
         }
-    
-        if (!empty($filteredEnchantments)) {
-            $trigger = new GenericTrigger();
-            $trigger->execute($attacker, $victim, $filteredEnchantments, 'DEFENSE', $extraData);
+
+        if ($filtered !== []) {
+            (new GenericTrigger())->execute($attacker, $victim, $filtered, 'DEFENSE', []);
         }
     }
 
@@ -322,32 +293,17 @@ final class EnchantmentListener implements Listener {
                 return;
             }
     
-            $filteredEnchantments = [];
-            foreach ($enchantments as $enchantmentConfig) {
-                $contextType = $enchantmentConfig['config']['type'] ?? [];
-    
-                if (!in_array("DEFENSE_MOB", $contextType, true)) {
-                    continue; 
+            $filtered = [];
+            foreach ($enchantments as $cfg) {
+                if (self::listHasTrigger($cfg, 'DEFENSE_MOB')) {
+                    $filtered[] = $cfg;
                 }
-    
-                $level = $enchantmentConfig['level'] ?? 1;
-                $chance = $enchantmentConfig['config']['levels'][$level]['chance'] ?? 100;
-                $enchantName = $enchantmentConfig['name'] ?? 'unknown';
-    
-                $extraData = [
-                    'enchant-level' => $level,
-                    'chance'        => $chance,
-                    'enchant-name'  => $enchantName
-                ];
-    
-                $filteredEnchantments[] = $enchantmentConfig;
             }
-    
-            if (!empty($filteredEnchantments)) {
-                $trigger = new GenericTrigger();
-                $trigger->execute($attacker, $victim, $filteredEnchantments, 'DEFENSE_MOB', $extraData);
+
+            if ($filtered !== []) {
+                (new GenericTrigger())->execute($attacker, $victim, $filtered, 'DEFENSE_MOB', []);
             }
-        } 
+        }
     }
 
     /**
@@ -374,26 +330,15 @@ final class EnchantmentListener implements Listener {
         $enchants = Utils::extractEnchantmentsFromItems($armorItems);
 
         $filtered = [];
-        $extraData = [];
         foreach ($enchants as $cfg) {
-            $types = $cfg['config']['type'] ?? [];
-
-            if (!in_array("DEFENSE_PROJECTILE", $types, true)) {
-                continue;
+            if (self::listHasTrigger($cfg, 'DEFENSE_PROJECTILE')) {
+                $filtered[] = $cfg;
             }
-
-            $level = $cfg['level'] ?? 1;
-            $filtered[] = $cfg;
-            $extraData = [
-                'enchant-name' => $cfg['name'] ?? 'unknown',
-                'enchant-level' => $level,
-                'chance' => $cfg['config']['levels'][$level]['chance'] ?? 100,
-            ];
         }
 
-        if (!empty($filtered)) {
-            (new GenericTrigger())->execute($shooter, $victim, $filtered, 'DEFENSE_PROJECTILE', $extraData);
-        } 
+        if ($filtered !== []) {
+            (new GenericTrigger())->execute($shooter, $victim, $filtered, 'DEFENSE_PROJECTILE', []);
+        }
     }
 
     /**
@@ -409,31 +354,16 @@ final class EnchantmentListener implements Listener {
             return;
         }
 
-        $filteredEnchantments = [];
-        $extraData = [];
+        $filtered = [];
 
-        foreach ($enchantments as $enchantmentConfig) {
-            $contextType = $enchantmentConfig['config']['type'] ?? [];
-
-            if (!in_array("EAT", $contextType, true)) {
-                continue;
+        foreach ($enchantments as $cfg) {
+            if (self::listHasTrigger($cfg, 'EAT')) {
+                $filtered[] = $cfg;
             }
-
-            $level = $enchantmentConfig['level'] ?? 1;
-            $chance = $enchantmentConfig['config']['levels'][$level]['chance'] ?? 100;
-            $enchantName = $enchantmentConfig['name'] ?? 'unknown';
-
-            $extraData = [
-                'enchant-level' => $level,
-                'chance' => $chance,
-                'enchant-name' => $enchantName
-            ];
-
-            $filteredEnchantments[] = $enchantmentConfig;
         }
 
-        if (!empty($filteredEnchantments)) {
-            (new GenericTrigger())->execute($player, null, $filteredEnchantments, 'EAT', $extraData);
+        if ($filtered !== []) {
+            (new GenericTrigger())->execute($player, null, $filtered, 'EAT', []);
         }
     }
     
@@ -469,47 +399,71 @@ final class EnchantmentListener implements Listener {
 
             $allEnchants = Utils::extractEnchantmentsFromItems($armorItems);
             $toTrigger = [];
-            $extraData = [];
+            /** @var string $triggerUpper */
+            $triggerUpper = \strtoupper((string) $trigger);
 
             foreach ($allEnchants as $enchant) {
-                $types = $enchant['config']['type'] ?? [];
-                if (!in_array($trigger, $types, true)) {
+                if (!self::listHasTrigger($enchant, $triggerUpper)) {
                     continue;
                 }
 
-                $level = $enchant['level'] ?? 1;
-                $levelCfg = $enchant['config']['levels'][$level] ?? [];
-                $chance = $levelCfg['chance'] ?? 100;
-                $name = $enchant['name']    ?? 'unknown';
+                $level = (int) ($enchant['level'] ?? 1);
+                /** @var array<string, mixed> $levelCfg */
+                $levelCfg = Utils::resolveLevelSlice((array) ($enchant['config']['levels'] ?? []), $level) ?? [];
+                $name = \strtolower((string) ($enchant['name'] ?? 'unknown'));
+                $vars = ['level' => $level];
+                $chancePct = (int) \round(NumericExpr::chancePercent($levelCfg['chance'] ?? 100, $vars, 100));
 
-                $extraData = [
-                    'enchant-name' => $name,
-                    'enchant-level' => $level,
-                    'chance' => $chance,
-                ];
+                foreach ((array) ($levelCfg['effects'] ?? []) as $effect) {
+                    if (($effect['type'] ?? '') !== "CANCEL_EVENT") {
+                        continue;
+                    }
 
-                foreach ($levelCfg['effects'] as $effect) {
-                    if (($effect['type'] ?? '') !== "CANCEL_EVENT") continue;
-                    if (CooldownManager::isOnCooldown($entity, $name)) continue;
+                    if (CooldownManager::isOnCooldown($entity, $name)) {
+                        continue;
+                    }
 
-                    if (mt_rand(1, 100) <= $chance) {
-                        $conds = $effect['conditions'] ?? [];
-                        $condsMet = empty($conds)
-                            ? true
-                            : $this->handleConditions($conds, $entity, null, $trigger, $extraData);
-                        if ($condsMet) {
-                            $event->cancel();
-                            CooldownManager::setCooldown($entity, $name, $levelCfg['cooldown'] ?? 0);
-                            return;
+                    if (\mt_rand(1, 100) > $chancePct) {
+                        continue;
+                    }
+
+                    $condsRaw = $effect['conditions'] ?? [];
+                    $condsMet = true;
+                    $ctx = [
+                        'enchant-name' => $name,
+                        'enchant-level' => $level,
+                        'chance' => $chancePct,
+                    ];
+                    if (!empty($condsRaw)) {
+                        if (isset($condsRaw['type'])) {
+                            $condsMet = $this->handleConditions((array) $condsRaw, $entity, null, $triggerUpper, $ctx);
+                        } else {
+                            foreach ((array) $condsRaw as $c) {
+                                if (!\is_array($c)) {
+                                    continue;
+                                }
+                                if (!$this->handleConditions($c, $entity, null, $triggerUpper, $ctx)) {
+                                    $condsMet = false;
+                                    break;
+                                }
+                            }
                         }
+                    }
+
+                    if ($condsMet) {
+                        $event->cancel();
+                        $cd = (int) \round(NumericExpr::evaluate($levelCfg['cooldown'] ?? 0, $vars, 0));
+                        CooldownManager::setCooldown($entity, $name, $cd);
+
+                        return;
                     }
                 }
 
                 $toTrigger[] = $enchant;
             }
 
-            if (!empty($toTrigger)) {
-                (new GenericTrigger())->execute($entity, null, $toTrigger, $trigger, $extraData);
+            if ($toTrigger !== []) {
+                (new GenericTrigger())->execute($entity, null, $toTrigger, $triggerUpper, []);
             }
         }
     }
@@ -612,11 +566,13 @@ final class EnchantmentListener implements Listener {
      */
     public function onEntityDeath(EntityDeathEvent $event): void {
         $victim = $event->getEntity();
-        $config = GeneralUtils::getConfiguration($this->plugin, "enchantments.yml");
-
 
         if (!$victim instanceof Living || $victim->isAlive()) {
             return;
+        }
+
+        if (!$victim instanceof Player) {
+            CooldownManager::clearEntityCooldowns($victim);
         }
 
         $cause = $victim->getLastDamageCause();
@@ -635,18 +591,27 @@ final class EnchantmentListener implements Listener {
         }
         $victimItems = array_merge($victimItems, $victim->getArmorInventory()->getContents());
 
-        $victimEnchants = Utils::getEffectsFromItems($victimItems, "DEATH", $config);
+        $victimEnchants = [];
+        foreach (Utils::extractEnchantmentsFromItems($victimItems) as $cfg) {
+            if (self::listHasTrigger($cfg, 'DEATH')) {
+                $victimEnchants[] = $cfg;
+            }
+        }
 
-        if (!empty($victimEnchants)) {
+        if ($victimEnchants !== []) {
             (new GenericTrigger())->execute($victim, $attacker, $victimEnchants, "DEATH");
-        } else {
         }
 
         if ($attacker instanceof Player) {
             $attackerItems = [$attacker->getInventory()->getItemInHand()];
-            $attackerEnchants = Utils::getEffectsFromItems($attackerItems, "DEATH", $config);
+            $attackerEnchants = [];
+            foreach (Utils::extractEnchantmentsFromItems($attackerItems) as $cfg) {
+                if (self::listHasTrigger($cfg, 'DEATH')) {
+                    $attackerEnchants[] = $cfg;
+                }
+            }
 
-            if (!empty($attackerEnchants)) {
+            if ($attackerEnchants !== []) {
                 (new GenericTrigger())->execute($attacker, $victim, $attackerEnchants, "DEATH");
             }
         }

@@ -1,30 +1,37 @@
 <?php
 
+declare(strict_types=1);
+
 namespace ecstsy\MartianEnchantments\utils\managers;
 
 use pocketmine\entity\Entity;
 
 class CooldownManager {
 
-    private static $cooldowns = [];
+    /** @var array<int, array<string, int>> entity runtime id → enchant id → unix end time */
+    private static array $cooldowns = [];
 
     /**
      * Checks if the enchantment is on cooldown for the given entity.
      *
-     * @param Entity $entity
-     * @param string $enchantmentId
      * @return int Remaining cooldown time in seconds, or 0 if no cooldown is active.
      */
     public static function getRemainingCooldown(Entity $entity, string $enchantmentId): int
     {
-        $currentTime = time();
+        $entityId = $entity->getId();
+        if (!isset(self::$cooldowns[$entityId][$enchantmentId])) {
+            return 0;
+        }
 
-        if (isset(self::$cooldowns[$entity->getId()][$enchantmentId])) {
-            $cooldownEnd = self::$cooldowns[$entity->getId()][$enchantmentId];
-            if ($currentTime < $cooldownEnd) {
-                $remainingTime = $cooldownEnd - $currentTime;
-                return $remainingTime;
-            }
+        $cooldownEnd = self::$cooldowns[$entityId][$enchantmentId];
+        $currentTime = time();
+        if ($currentTime < $cooldownEnd) {
+            return $cooldownEnd - $currentTime;
+        }
+
+        unset(self::$cooldowns[$entityId][$enchantmentId]);
+        if (self::$cooldowns[$entityId] === []) {
+            unset(self::$cooldowns[$entityId]);
         }
 
         return 0;

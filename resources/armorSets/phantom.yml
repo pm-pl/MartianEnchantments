@@ -1,0 +1,105 @@
+# MartianEnchantments — armor set (full leather + weapon). Reload: /me reload
+#
+# material-tier: LEATHER | CHAINMAIL | IRON | GOLD / GOLDEN | DIAMOND | NETHERITE
+# leather-dye: "R,G,B" (only applies when tier is LEATHER)
+# unbreakable: true|false
+#
+# effects:
+#   attacker-full-set: outgoing_damage_bonus — additive to damage dealt (0.15 = +15%)
+#   defender-full-set: incoming_damage_reduction — multiplicative per entry (0.05 = take 5% less)
+#   weapon-bonuses.<weapon-yaml-key>:
+#     - outgoing_damage_bonus
+#     - victim_armor_durability_damage (durability points per hit to victim's worn armor)
+
+id: phantom
+display-name: "&r&l&cPhantom"
+material-tier: LEATHER
+unbreakable: true
+leather-dye: "170,0,170"
+
+pieces:
+  helmet:
+    id: phantom_helmet
+    name: "&r&l&cPhantom Hood"
+    lore:
+      - "&r&cThe legendary hood of the Phantom."
+      - ""
+      - "&r&c&lPHANTOM SET BONUS"
+      - "&r&c&l* &r&cDeal &f+15% &cdamage to all enemies."
+      - "&r&7&o(Requires all 4 phantom items.)"
+    vanilla-enchantments:
+      - enchant: unbreaking
+        level: 3 
+      - enchant: protection
+        level: 4
+
+  chestplate:
+    id: phantom_chestplate
+    name: "&r&l&cPhantom Shroud"
+    lore:
+      - "&r&cThe legendary shroud of the Phantom."
+      - ""
+      - "&r&c&lPHANTOM SET BONUS"
+      - "&r&c&l* &r&cDeal &f+15% &cdamage to all enemies."
+      - "&r&7&o(Requires all 4 phantom items.)"
+    vanilla-enchantments:
+      - enchant: unbreaking
+        level: 3
+      - enchant: protection
+        level: 4
+
+  leggings:
+    id: phantom_leggings
+    name: "&r&l&cPhantom Robeset"
+    lore:
+      - "&r&cThe demonic robe of the Phantom."
+      - ""
+      - "&r&c&lPHANTOM SET BONUS"
+      - "&r&c&l* &r&cDeal &f+15% &cdamage to all enemies."
+      - "&r&7&o(Requires all 4 phantom items.)"
+    vanilla-enchantments:
+      - enchant: unbreaking
+        level: 3
+      - enchant: protection
+        level: 4
+
+  boots:
+    id: phantom_boots
+    name: "&r&l&cPhantom Sandals"
+    lore:
+      - "&r&cThe silent sandals of the Phantom."
+      - ""
+      - "&r&c&lPHANTOM SET BONUS"
+      - "&r&c&l* &r&cDeal &f+15% &cdamage to all enemies."
+      - "&r&7&o(Requires all 4 phantom items.)"
+    vanilla-enchantments:
+      - enchant: unbreaking
+        level: 3
+      - enchant: protection
+        level: 4
+
+weapons:
+  phantom_sword:
+    item: DIAMOND_SWORD
+    name: "&r&l&cPhantom Scythe"
+    lore:
+      - "&r&cThe legendary scythe of the Phantom."
+      - ""
+      - "&r&c&lPHANTOM SET BONUS"
+      - "&r&c&l* &r&cDeal &f+5% &cdamage to all enemies."
+      - "&r&7&o(Requires all 4 phantom items.)"
+    vanilla-enchantments:
+      - enchant: sharpness
+        level: 5
+      - enchant: unbreaking
+        level: 3
+
+effects:
+  attacker-full-set:
+    - type: outgoing_damage_bonus
+      amount: 0.15
+  defender-full-set: []
+  weapon-bonuses:
+    phantom_sword:
+      - type: outgoing_damage_bonus
+        amount: 0.05

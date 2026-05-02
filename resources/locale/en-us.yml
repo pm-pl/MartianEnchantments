@@ -1,10 +1,9 @@
-version: 2
+version: 8
 
 # Use {p} to insert the plugins prefix.
 prefix: "&r&8[&dMartianEnchantments&8]&r "
 
 effects:
-  steal-money: "&r&6{attacker} &7stole &6{amount} &7from &6{victim}&7!"
   used: "&r&fUsed &r{enchant-color} {level}"
 
 commands:
@@ -13,8 +12,13 @@ commands:
   enchantment-not-found: "&r&cEnchantment &c{enchant}&c could not be found."
   invalid-amount: "&cInvalid amount. Must be between 1-64."
   invalid-enchant: "&c{enchant} is not a valid enchant!"
+  # Used by /me givebook and similar when the enchant name does not match any loaded enchant
+  invalid-enchantment: "&cThat enchantment is not valid or is not loaded. Check &f/me list&c for names."
   invalid-level: "&cInvalid enchant level! Try using: {levels}"
   invalid-usage: "&cUsage: {usage}"
+  reload:
+    notice-scope: "&7Reload updates files under &fplugin_data/MartianEnchantments&7 (config, enchants, groups, locale, armor sets). &fRestart the server &7if something still looks out of date."
+    success: "&aMartianEnchantments &freloaded &7({armor} armor YAMLs → sets: &f{sets}&7, &f{ms}ms&7)."
   not-a-number: "&c{number} is not a number!"
   not-holding-item: "&cYou must be holding an item!"
   enchantment-info:
@@ -52,13 +56,51 @@ commands:
       invalid-delay: "&c{delay} is not a valid integer!"
       success: "&eChanged &6{gkit}&e kit delay to &6{delay}"
   main:
-    unknown-command: "&cIncorrect command usage! Type '/ae' for the correct usage."
+    unknown-command: "&cUnknown usage. Run &d/me&c for MartianEnchantments commands."
+    help:
+      # Unused (help shows .player lines only — keeps chat one font size).
+      intro: ""
+      intro2: ""
+      player:
+        - "&r&d/me about &r&8Plugin/version blurb"
+        - "&r&d/me list &r&8Custom enchant browser"
+        - "&r&d/me info &f<enchant> &r&8Levels, applies, triggers"
+        - "&r&d/me enchant &f<enchant> <level> &r&8Apply to held item"
+        - "&r&d/me unenchant &f<enchant> &r&8Remove from held item"
+        - "&r&8———————— &fAdmin &r&8————————"
+        - "&r&d/me giveitem &f<player> <item> <amount> [extras] &r&8Utilities"
+        - "&r&d/me givebook &f<player> <enchant> <level> <amount> <success> <destroy> &r&8Enchant books"
+        - "&r&d/me givercbook &r&8Right-click loot books"
+        - "&r&d/me givearmorset &f<player> <set> <piece> &r&8Configurable armor sets"
+        - "&r&d/me reload &r&8Reload YAML from disk"
+      console:
+        - "&r&3MartianEnchantments &r&8from console"
+        - "&r&f  /me reload &r&8reload data"
+        - "&r&f  /me list &r&8enchant UI is in-game only"
+        - "&r&f  /me info <enchant> &r&8one enchant’s details"
+        - "&r&f  /me give &r&8use in-game (&d/me&f); console: reload/info/list text only"
+      header: "&r&8— &dMartianEnchantments&8 · page &f{page}&8 —"
+      footer: "&r&8— Aliases &d/me&f, &d/mes &8—"
+      invalid-page: "&cInvalid page. Use 1 to {max}."
+      pagination: "&r&fPage &f{current}&f/&f{total}&r&8. Next:&f /me {next}"
+      args-hint: "&r&f< >&f = required, &f[ ]&f = optional. Don't type dash as part of commands."
+      sub:
+        giveitem: "Give Martian items (admin)"
+        about: "Version and about"
+        enchant: "Apply custom enchant to held item"
+        unenchant: "Remove custom enchant from held item"
+        list: "Browse enchant list (categories & forms)"
+        givebook: "Give an enchanted book (admin)"
+        info: "Show one enchantment’s details"
+        reload: "Reload configuration"
+        givercbook: "Give right-click book item (admin)"
+        givearmorset: "Give armor set pieces (admin)"
     setsouls:
-      invalid-usage: "&cInvalid usage: /ae setsouls <amount>"
+      invalid-usage: "&cInvalid usage: /me setsouls <amount>"
       invalid-item: "&cInvalid item."
       success: "&cSet item's soul count to: {amount}"
     unenchant:
-      invalid-usage: "&cInvalid usage: /ae unenchant <enchant>"
+      invalid-usage: "&cInvalid usage: /me unenchant <enchant>"
       invalid-enchant: "&c{enchant} is not a valid enchant!"
       not-holding-item: "&cYou must be holding an item!"
       does-not-have-enchant: "&cThat item doesn't have &4{enchant}&c!"
@@ -85,8 +127,24 @@ commands:
       removed: "&cRemoved the {enchant} enchant from the item."
     giveitem:
       success: "&7Added {amount}x {item}&r&7 for player &b{player}"
+      failed: "&cCould not create that item. Check the name and arguments; see &f/me help&c and try &f/me giveitem&c in-game for syntax."
+      needs-group: "&cThat item needs a &fgroup&c. Example: &f/me giveitem {player} {item} {amount} SIMPLE"
+      usage-one-liner: "&c/me giveitem <player> <item> <amount> [extras] &8Use &f/me help &cextras."
+      usage-lines:
+        - "&r&f/me giveitem &f<player> <item> <amount> &f[extras]"
+        - "&r&fGroup scrolls:&f randomizer · secret · slotincreaser · mystery · magic &8- &ftype &fafter amount&f, then &fGROUP"
+        - "&r&fsoulgem:&f extras &fpool&f (count) [&flegacy group&f] &8- legacy only if rarity match is on"
+        - "&r&fblackscroll:&f [&fsuccess%&f]&8 | &fmystery &8| &fmagic:&f [&fgroup&f] [&fpercent&f]"
+        - "&r&forb:&f <weapon|armor|tool> <max-slots> <success%&f> &8- &ftype first extra after amount"
+        - "&r&fValid items:&f {items}"
+      console: "&7Console: use the same as in-game, with a player name. {items}"
     givercbook:
       success: "&aGave &2{player} {amount}x {group} &aright click books!"
+    givearmorset:
+      success: "&7Gave &b{player}&7 armor set &f{set}&7 piece(s): &f{piece}"
+      unknown-set: "&cUnknown armor set &f{set}&c. Check &fplugin_data/.../armorSets/&c YAML."
+      bad-piece: "&cInvalid piece. Use &fhelmet&c, &fchestplate&c, &fleggings&c, &fboots&c, a &fweapon key&c, &ffull&c, or &fall&c."
+      usage-one-liner: "&c/me givearmorset <player> <set> <piece>"
     give:
       success: "&aSuccessfully gave {player} one {enchant} {level} book!"
     tinkereritem:
@@ -108,16 +166,31 @@ token:
 
 interact:
   main-hand-only: "&cYou can only do that with your main hand!"
+  # Tags: {enchant} {applies} {max-level} {roman-level} {description}
+  enchantment-book:
+    header: "&r&8──────── &dEnchantment &r&8────────"
+    lines:
+      - "&r&8Enchantment &r&d| &f{enchant}"
+      - "&r&8Applies to &r&d| &f{applies}"
+      - "&r&8Max Level &r&d| &f{max-level}"
+      - "&r&8Description &r&d| &f{description}"
+    unknown-enchant: "&cUnknown or unloaded enchant on this book."
+    invalid-level: "&cThis book’s level is missing or invalid."
+  # RC / right-click loot book: {group-color} {group-name} {enchant-color} {level} {enchant}
+  enchanter-book:
+    empty-group: "&cThere are no enchantments in that group (&f{group}&c)."
+    success: "&r&7You examined {group-color}{group-name}&r&7 book and found {enchant-color} {level}"
 
+# Enchanter: use EXP/levels in menus — no currency API.
 enchanter:
-  re-buy: "&cPlease re-buy the item from the enchanter."
+  session-stale: "&cThat enchanter window is out of date. Open the enchanter again."
   disabled-in-world: "&cThe Enchanter is disabled in this world."
   full-inventory: "&cYour inventory is full!"
   examine-book: "&7You examined {group-color}{group-name}&7 book and found {enchant-color} {level}"
-  unknown-payment-method: "&cFailed to validate {paymentType} payment method, please contact an administrator."
-  successful-purchase: "&aPurchase successful!"
-  cannot-afford:
-    - "&cYou do not have enough EXP to purchase that."
+  invalid-enchanter-cost: "&cUnrecognized enchanter cost &4{code}&c. Contact an admin."
+  trade-complete: "&aTrade complete."
+  not-enough-exp:
+    - "&cNot enough experience for that."
     - "&7Your XP: {exp}"
 
 tinkerer:
@@ -129,9 +202,7 @@ tinkerer:
 alchemist:
   doesnt-accept: "&cThe Alchemist doesn't accept this item!"
   trade-cancelled: "&cTrade cancelled."
-  cannot-afford: "&cYou cannot afford this transaction!"
   exceeds-max-level: "&cYour combined level exceeds maximum enchantment level!"
-  take-currency: "&c- {price}"
 
 gkits:
   no-permission: "&eYou don't have permissions to use &e{gkit}&6 kit."
@@ -184,6 +255,14 @@ items:
   soul-tracker:
     disabled: "&cSouls are not enabled on this server!"
     apply-successful: "&7You successfully applied &f&lSoul Tracker &7to your item!"
+  soulgem:
+    toggle-off: "&7Soul channel &fdeactivated&7. Pool saved on the gem."
+    toggle-on: "&aSoul channel on. Linked &f{souls}&a souls from your gem."
+    hold-gem: "&cHold a Soul Gem in your main hand."
+    single-stack: "&cSplit to a single Soul Gem stack to channel."
+    empty: "&cThat Soul Gem has no souls left."
+    already-other: "&cAnother Soul Gem slot is already channeling. Turn it off first."
+    invalid-gem: "&cBroken Soul Gem (missing data). Replace with &f/me giveitem … soulgem&c."
   magic-dust:
     full-inventory: "&cYour inventory is full!"
     single-items-only: "&cYou can only use this on single items!"
@@ -213,8 +292,38 @@ items:
     success:
       - "&r&7You successfully applied &r&3MobTrak Creator"
   holywhitescroll:
+    item-saved: "&aHoly White Scroll saved the item from destruction!"
     applied:
       - "&r&7You successfully applied &r&l&6Holy White Scroll"
+  apply:
+    randomization-success: "&aRerolled this book's success and destroy chances."
+    randomization-wrong-group: "&cThat randomizer is for a different book group than this book."
+    mystery-success: "&aAdded success chance to this book with mystery dust."
+    mystery-already-max: "&cThis book already has &f100%&c success — mystery dust does nothing."
+    mystery-wrong-group: "&cThis dust is for a different book group than this book."
+    magic-success: "&aReduced destroy chance on this book with magic dust."
+    magic-wrong-group: "&cThis dust is for a different book group than this book."
+    secret-invalid: "&cThis Secret Dust has no valid group tag."
+    secret-opened: "&aYou opened Secret Dust and received a grouped dust!"
+    white-already: "&cThis item already has a white scroll on it."
+    white-success: "&aWhite scroll has been bound to the item (protects on failed destroy)."
+    holy-already: "&cThis item already has a Holy White Scroll on it."
+    holy-need-white: "&cApply a White Scroll to this gear first."
+    holy-primed: "&cHoly is already armed for death — it must proc before you can apply another holy scroll."
+    holy-corrupted: "&cThat item is corrupted and cannot take more holy scroll charges."
+    holy-exhausted: "&cHoly death saves are exhausted on this item."
+    holy-success: "&aHoly white scroll armed! Possible death saves remaining before next proc: &e{remaining}"
+    holy-death-kept: "&7Holy White Scroll: &fabove item was kept once from dropping on death (&7charges update on respawn&f)."
+    black-extract: "&aExtracted a random enchant to a book. Remaining enchants are still on the item."
+    transmog-success: "&aTransmog saved your enchantment layout on this item."
+    slot-wrong-group: "&cThis slot increaser is for a different group than the enchant on the item."
+    slot-success: "&aIncreased max enchantment slots on the item."
+    trak-already: "&cThis item already has a trak type."
+    trak-wrong-item: "&cThis trak can’t be applied to that item type."
+    trak-applied: "&aTrak has been added to the item. Stats will update as you play."
+    soultrack-already: "&cThis item already has soul tracking."
+    soultrack-applied: "&aSoul tracking enabled on this item."
+    orb-success: "&aThe orb changed max enchantment slots on the item."
 
 combining:
   already-max-level: "&cThis enchantment is already max level!"
@@ -227,6 +336,7 @@ enchant-limitations:
   cannot-be-modified: "&cThis item cannot be modified!"
 
 applying:
+  gear-not-whitelisted: "&cCustom enchant books cannot be applied to this gear type (&7see items.settings.can-apply-to in config.yml&c)."
   not-applicable-with: "&cThe &4{enchant1} &cenchantment cannot be applied together with the &4{enchant2}&7 &cenchant!"
   requires-enchant: "&cThe &4{enchant1} &cenchantment requires the &4{enchant2}&7 &cenchant to be applied!"
   already-applied: "&cThe item already has this enchantment."
@@ -234,6 +344,10 @@ applying:
   max-level: "&cThis enchantment is already at max level!"
   wrong-material: "&cThis enchantment cannot be applied on this item."
   invalid-book: "&cInvalid enchantment book."
+
+armor-sets:
+  activated: "&a{set} &aset bonus activated!"
+  deactivated: "&c{set} &cset bonus deactivated."
 
 slots:
   limit-reached: "&cYou cannot apply that enchantment! There are no free slots left!"
@@ -243,18 +357,3 @@ chances:
 
 destroy:
   book-failed: "&cEnchantment was unsuccessful!"
-
-interact:
-  # Tags:
-  # {enchant} - Enchantment Name
-  # {applies} - Applies To
-  # {max-level} - Max Level
-  # {roman-level} - Max Level in Roman Numerals
-  # {description} - Description
-  enchantment-book:
-    header: "&7──────── &d&lEnchantment Info &7────────"
-    lines:
-      - "&r&7 * &dEnchantment &7| {enchant}"
-      - "&r&7 * &dApplies to &7| &f{applies}"
-      - "&r&7 * &dMax Level &7| &f{max-level}"
-      - "&r&7 * &dDescription &7| &f{description}"

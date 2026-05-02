@@ -30,8 +30,13 @@ use ecstsy\MartianEnchantments\utils\registries\EffectRegistry;
 use ecstsy\MartianEnchantments\libs\ecstsy\MartianUtilities\utils\GeneralUtils;
 use ecstsy\MartianEnchantments\libs\JackMD\ConfigUpdater\ConfigUpdater;
 use ecstsy\MartianEnchantments\libs\muqsit\invmenu\InvMenuHandler;
+use ecstsy\MartianEnchantments\armor\ArmorSetRegistry;
+use ecstsy\MartianEnchantments\listeners\ArmorSetListener;
 use ecstsy\MartianEnchantments\listeners\EnchantmentListener;
+use ecstsy\MartianEnchantments\listeners\HolyWhiteDeathListener;
 use ecstsy\MartianEnchantments\listeners\ItemListener;
+use ecstsy\MartianEnchantments\listeners\MartianItemUtilityListener;
+use ecstsy\MartianEnchantments\listeners\TrakListener;
 use pocketmine\data\bedrock\EnchantmentIdMap;
 use pocketmine\entity\effect\StringToEffectParser;
 use pocketmine\entity\Entity;
@@ -49,10 +54,37 @@ final class Utils {
     public const FAKE_ENCH_ID = -1;
 
     public static LanguageManager $languageManager;
+
+    /**
+     * YAML commonly uses quoted level keys ({@code '1'}); NBT may store ints — resolve either.
+     *
+     * @param array<mixed, mixed> $levels
+     * @return ?array<mixed, mixed>
+     */
+    public static function resolveLevelSlice(array $levels, mixed $level): ?array {
+        if ($levels === []) {
+            return null;
+        }
+        $i = is_numeric($level) ? (int) $level : 0;
+        if (isset($levels[$i]) && \is_array($levels[$i])) {
+            /** @var array<mixed, mixed> $slice */
+            $slice = $levels[$i];
+            return $slice;
+        }
+        $sk = (string) $i;
+        if (isset($levels[$sk]) && \is_array($levels[$sk])) {
+            /** @var array<mixed, mixed> $slice */
+            $slice = $levels[$sk];
+            return $slice;
+        }
+
+        return null;
+    }
     
     public const CFG_VERSIONS = [
         "config" => 2,
-        "en-us" => 2,
+        /** Mirrors top-level {@code version} in {@see resources/locale/en-us.yml} for operators / Poggit releases. */
+        "en-us" => 8,
     ];
 
     public static function initAll(): void {
@@ -69,11 +101,14 @@ final class Utils {
             "en-us.yml",
             "es-es.yml"
         ]);
+        self::upgradePackagedLocaleFiles($loader);
 
         self::saveAllFilesInDirectory($loader, "armorSets", [
-            "starter.yml",
-            "legendary.yml"
+            "phantom.yml",
+            "yeti.yml"
         ]);
+
+        ArmorSetRegistry::load();
 
         self::saveAllFilesInDirectory($loader, "menus", [
             "enchanter.yml",
@@ -81,10 +116,10 @@ final class Utils {
         ]);
 
         $config = GeneralUtils::getConfiguration($loader, "config.yml");
-        $language = $config->getNested("settings.language");
+        $language = (string) $config->getNested("settings.language", "en-us");
 
         self::$languageManager = new LanguageManager($loader, $language);
-        $loader->getLogger()->info("MartianEnchantments enabled with language: " . $language);
+        $loader->getLogger()->debug("MartianEnchantments language: " . $language);
 
         $unregisteredCommands = ["me"];
 
@@ -97,12 +132,16 @@ final class Utils {
         }
 
         $loader->getServer()->getCommandMap()->registerAll("MartianEnchantments", [
-            new MECommand($loader, "martianenchantments", "View the martian enchantments commands", ["mes", "me"]),
+            new MECommand($loader, "martianenchantments", "MartianEnchantments — custom enchants (/me)", ["mes", "me"]),
         ]);
 
         $listeners = [
             new EnchantmentListener($loader),
             new ItemListener(),
+            new MartianItemUtilityListener(),
+            new HolyWhiteDeathListener(),
+            new ArmorSetListener(),
+            new TrakListener(),
         ];
 
         foreach ($listeners as $listener) {
@@ -116,13 +155,7 @@ final class Utils {
         if(!UtilityHandler::isRegistered()) {
             UtilityHandler::register($loader);
         }
-        
-        if ($config->getNested("economy.enabled") === true) {
-            // implement
-        } else {
-            $loader->getLogger()->warning("Economy support is disabled.");
-        }
-        
+
         Utils::initRegistries();
         Groups::init();
         CustomEnchantments::getAll();
@@ -138,6 +171,81 @@ final class Utils {
                 $plugin->getLogger()->warning("Failed to save resource: $path");
             }
         }
+    }
+
+    /**
+     * Replace plugin_data locale YAML when the bundled copy has a higher top-level {@code version} integer.
+     * Previous file is renamed to {@code *_old.yml} (manual merge if you customized translations).
+     */
+    public static function upgradePackagedLocaleFiles(PluginBase $plugin): void {
+        foreach (["locale/en-us.yml"] as $relativePath) {
+            self::upgradePackagedYamlIfBundledNewer($plugin, $relativePath);
+        }
+    }
+
+    /**
+     * @return int Bundled YAML {@code version} scalar, or 0 if unreadable / missing resource.
+     */
+    public static function readBundledYamlVersion(PluginBase $plugin, string $relativePath): int {
+        $stream = $plugin->getResource($relativePath);
+        if ($stream === null) {
+            return 0;
+        }
+
+        try {
+            $body = stream_get_contents($stream);
+
+            return self::extractTopLevelYamlVersion($body !== false ? $body : '');
+        } finally {
+            fclose($stream);
+        }
+    }
+
+    private static function upgradePackagedYamlIfBundledNewer(PluginBase $plugin, string $relativePath): void {
+        $bundledVer = self::readBundledYamlVersion($plugin, $relativePath);
+        if ($bundledVer <= 0) {
+            return;
+        }
+
+        $absolute = $plugin->getDataFolder() . str_replace('/', DIRECTORY_SEPARATOR, $relativePath);
+        if (!\is_file($absolute)) {
+            return;
+        }
+
+        $installed = new Config($absolute, Config::YAML);
+        $have = (int) $installed->get('version', 0);
+        if ($have >= $bundledVer) {
+            return;
+        }
+
+        $dir = dirname($absolute);
+        $stem = pathinfo($absolute, PATHINFO_FILENAME);
+        $ext = pathinfo($absolute, PATHINFO_EXTENSION);
+        $backup = $dir . DIRECTORY_SEPARATOR . $stem . "_old." . $ext;
+
+        if (\is_file($backup)) {
+            @unlink($backup);
+        }
+
+        rename($absolute, $backup);
+
+        GeneralUtils::invalidateCachedConfig($absolute);
+
+        $plugin->saveResource($relativePath, true);
+
+        GeneralUtils::invalidateCachedConfig($absolute);
+
+        $plugin->getLogger()->info(
+            "Updated data file {$relativePath} (version {$have} → {$bundledVer}). Previous copy: " . basename($backup)
+        );
+    }
+
+    private static function extractTopLevelYamlVersion(string $yaml): int {
+        if (\preg_match('/^\s*version:\s*(\d+)/m', $yaml, $m)) {
+            return (int) $m[1];
+        }
+
+        return 0;
     }
 
     public static function initRegistries(): void {
@@ -210,6 +318,7 @@ final class Utils {
      */
     public static function extractEnchantmentsFromItems(array $items): array {
         $enchantmentsToApply = [];
+        /** @var array<string, mixed> $enchantmentConfigs top-level keys = enchant ids from enchantments.yml */
         $enchantmentConfigs = GeneralUtils::getConfiguration(Loader::getInstance(), "enchantments.yml")->getAll();
         
         foreach ($items as $item) {
@@ -229,7 +338,7 @@ final class Utils {
                     continue;
                 }
                 
-                $level = $levelTag->getValue();
+                $level = (int) $levelTag->getValue();
                 $enchantmentConfig = $enchantmentConfigs[$key];
                 $enchantmentConfig['level'] = $level;
                 $appliesTo = $enchantmentConfig['applies_to'] ?? [];
@@ -250,10 +359,17 @@ final class Utils {
         return self::extractEnchantments($items, function (array $itemData, Item $item) use ($trigger, $config) {
             $identifier = strtolower($itemData['name']);
             $configData = $config->get($identifier);
-            if ($configData && in_array($trigger, $configData['type'], true)) {
-                return $configData['levels'][$itemData['level']]['effects'] ?? [];
+            if (!$configData || !\is_array($configData)) {
+                return [];
             }
-            return [];
+            if (!in_array($trigger, (array) $configData['type'], true)) {
+                return [];
+            }
+
+            $lv = (int) $itemData['level'];
+            $slice = self::resolveLevelSlice((array) ($configData['levels'] ?? []), $lv);
+
+            return $slice['effects'] ?? [];
         });
     }
     
@@ -261,10 +377,17 @@ final class Utils {
         return self::extractEnchantments($items, function (array $itemData, Item $item) use ($trigger, $config) {
             $identifier = strtolower($itemData['name']);
             $configData = $config->get($identifier);
-            if ($configData && in_array($trigger, $configData['type'], true)) {
-                return $configData['levels'][$itemData['level']]['conditions'] ?? [];
+            if (!$configData || !\is_array($configData)) {
+                return [];
             }
-            return [];
+            if (!in_array($trigger, (array) $configData['type'], true)) {
+                return [];
+            }
+
+            $lv = (int) $itemData['level'];
+            $slice = self::resolveLevelSlice((array) ($configData['levels'] ?? []), $lv);
+
+            return $slice['conditions'] ?? [];
         });
     }
 
@@ -277,7 +400,7 @@ final class Utils {
             if ($nbt === null) continue;
     
             foreach ($nbt->getValue() as $enchantName => $levelTag) {
-                $level = $levelTag->getValue();
+                $level = (int) $levelTag->getValue();
                 $enchantmentData = [
                     'name' => $enchantName,
                     'level' => $level
@@ -303,12 +426,13 @@ final class Utils {
     }
 
     public static function removeEnchantmentEffects(Player $player, array $enchantmentData): void {
-        $level = $enchantmentData['level'] ?? 1;
-        if (!isset($enchantmentData['config']['levels'][$level]['effects'])) {
+        $level = (int) ($enchantmentData['level'] ?? 1);
+        $slice = self::resolveLevelSlice((array) ($enchantmentData['config']['levels'] ?? []), $level);
+        if ($slice === null) {
             return;
         }
-        
-        $effects = $enchantmentData['config']['levels'][$level]['effects'];
+
+        $effects = $slice['effects'] ?? [];
         foreach ($effects as $effectData) {
             if (strtoupper($effectData['type'] ?? '') === 'ADD_POTION' && isset($effectData['potion'])) {
                 $potionEffect = StringToEffectParser::getInstance()->parse($effectData['potion']);
@@ -415,21 +539,11 @@ final class Utils {
                 continue;
             }
 
-            $level = $cfg['level'] ?? 1;
-            $chance = $cfg['config']['levels'][$level]['chance'] ?? 100;
-            $name = $cfg['name'] ?? 'unknown';
-
-            $extra = [
-                'enchant-level' => $level,
-                'chance' => $chance,
-                'enchant-name' => $name,
-            ];
-
             $filtered[] = $cfg;
         }
 
         if (!empty($filtered)) {
-            (new GenericTrigger())->execute($attacker, $victim, $filtered, 'ARROW_HIT', $extra);
+            (new GenericTrigger())->execute($attacker, $victim, $filtered, 'ARROW_HIT', []);
         }
     }
 

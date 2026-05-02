@@ -14,11 +14,15 @@ final class Loader extends PluginBase {
     use SingletonTrait;
 
     private static ?ZippedResourcePack $pack;
-    public $economyProvider;
     public const TYPE_DYNAMIC_PREFIX = "martianenchants:customsizedinvmenu_"; # The entire custom sized inv is from muqsit
 
     public function onLoad(): void {
         self::setInstance($this);
+
+        $autoload = dirname($this->getFile()) . DIRECTORY_SEPARATOR . "vendor" . DIRECTORY_SEPARATOR . "autoload.php";
+        if (is_file($autoload)) {
+            require_once $autoload;
+        }
     }
 
     public function onEnable(): void {

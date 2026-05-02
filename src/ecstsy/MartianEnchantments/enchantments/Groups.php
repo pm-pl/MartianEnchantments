@@ -3,7 +3,7 @@
 namespace ecstsy\MartianEnchantments\enchantments;
 
 use ecstsy\MartianEnchantments\Loader;
-use ecstsy\MartianUtilities\utils\GeneralUtils;
+use ecstsy\MartianEnchantments\libs\ecstsy\MartianUtilities\utils\GeneralUtils;
 use pocketmine\item\enchantment\StringToEnchantmentParser;
 use pocketmine\utils\TextFormat as C;
 

@@ -4,7 +4,7 @@ namespace ecstsy\MartianEnchantments\effects;
 
 use ecstsy\MartianEnchantments\utils\EffectInterface;
 use ecstsy\MartianEnchantments\utils\Utils;
-use ecstsy\MartianUtilities\utils\GeneralUtils;
+use ecstsy\MartianEnchantments\libs\ecstsy\MartianUtilities\utils\GeneralUtils;
 use pocketmine\utils\TextFormat as C;
 use pocketmine\entity\Entity;
 use pocketmine\player\Player;

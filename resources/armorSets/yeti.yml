@@ -1,0 +1,105 @@
+# Frostbound / Yeti — +10% outgoing, −5% incoming, weapon chips enemy armor durability.
+
+id: yeti
+display-name: "&b&lYeti"
+material-tier: LEATHER
+unbreakable: true
+leather-dye: "60,125,195"
+
+pieces:
+  helmet:
+    id: yeti_helmet
+    name: "&r&l&bYeti Facemask"
+    lore:
+      - "&r&bThe savage mask of the Yeti."
+      - ""
+      - "&r&b&lYETI SET BONUS"
+      - "&r&b&l* &r&bDeal &f+10% &bdamage to all enemies."
+      - "&r&b&l* &r&bEnemies deal &f10% &btake less damage."
+      - "&r&7&o(Requires all 4 yeti items.)"
+    vanilla-enchantments:
+      - enchant: unbreaking
+        level: 3
+      - enchant: protection
+        level: 4
+
+  chestplate:
+    id: yeti_chestplate
+    name: "&r&l&bBloody Yeti Torso"
+    lore:
+      - "&bImpermeable chestplate of the Yeti."
+      - ""
+      - "&b&lYETI SET BONUS"
+      - "&r&b&l* &r&bDeal &f+10% &bdamage to all enemies."
+      - "&r&b&l* &r&bEnemies deal &f10% &bless damage to you."
+      - "&r&7&o(Requires all 4 yeti items.)"
+    vanilla-enchantments:
+      - enchant: unbreaking
+      - enchant: protection
+        level: 4
+      - enchant: deathbringer
+        level: 1-3
+
+  leggings:
+    id: yeti_leggings
+    name: "&r&l&bFuzzy Yeti Leggings"
+    lore:
+      - "&r&bThe cozy yet monstrous legs of the Yeti."
+      - ""
+      - "&r&b&lYETI SET BONUS"
+      - "&r&b&l* &r&bDeal &f+10% &bdamage to all enemies."
+      - "&r&b&l* &r&bEnemies deal &f10% &bless damage to you."
+      - "&r&7&o(Requires all 4 yeti items.)"
+    vanilla-enchantments:
+      - enchant: unbreaking
+        level: 3
+      - enchant: protection
+        level: 4
+      - enchant: deathbringer
+        level: 1-3
+
+  boots:
+    id: yeti_boots
+    name: "&r&l&b Big-Yeti Boots"
+    lore:
+      - "&r&bThe sturdy boots of the Yeti."
+      - ""
+      - "&r&b&lYETI SET BONUS"
+      - "&r&b&l* &r&bDeal &f+10% &bdamage to all enemies."
+      - "&r&b&l* &r&bEnemies deal &f10% &bless damage to you."
+      - "&r&7&o(Requires all 4 yeti items.)"
+    vanilla-enchantments:
+      - enchant: unbreaking
+        level: 3
+      - enchant: protection
+        level: 4
+      - enchant: deathbringer
+        level: 1-3
+
+weapons:
+  yeti_sword:
+    item: DIAMOND_AXE
+    name: "&r&l&bYeti Maul"
+    lore:
+      - "&r&bA crushing maul of the Yeti."
+      - ""
+      - "&r&b&lYETI WEAPON BONUS"
+      - "&r&b&l* &r&bApplies extra durability damage to &fenemy armor&b."
+      - "&r&7&o(Requires all 4 yeti items.)"
+    vanilla-enchantments:
+      - enchant: sharpness
+        level: 5
+      - enchant: unbreaking
+        level: 3
+
+effects:
+  attacker-full-set:
+    - type: outgoing_damage_bonus
+      amount: 0.10
+  defender-full-set:
+    - type: incoming_damage_reduction
+      amount: 0.05
+  weapon-bonuses:
+    yeti_sword:
+      - type: victim_armor_durability_damage
+        amount: 2

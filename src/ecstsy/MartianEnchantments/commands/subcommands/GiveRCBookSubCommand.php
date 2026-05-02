@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace ecstsy\MartianEnchantments\commands\subcommands;
 
-use CortexPE\Commando\args\IntegerArgument;
-use CortexPE\Commando\args\RawStringArgument;
-use CortexPE\Commando\BaseSubCommand;
+use ecstsy\MartianEnchantments\libs\CortexPE\Commando\args\IntegerArgument;
+use ecstsy\MartianEnchantments\libs\CortexPE\Commando\args\RawStringArgument;
+use ecstsy\MartianEnchantments\libs\CortexPE\Commando\BaseSubCommand;
 use ecstsy\MartianEnchantments\Loader;
-use ecstsy\MartianEnchantments\utils\Items;
-use ecstsy\MartianUtilities\utils\GeneralUtils;
-use ecstsy\MartianUtilities\utils\PlayerUtils;
+use ecstsy\MartianEnchantments\server\items\MartianItems;
+use ecstsy\MartianEnchantments\libs\ecstsy\MartianUtilities\utils\GeneralUtils;
+use ecstsy\MartianEnchantments\libs\ecstsy\MartianUtilities\utils\PlayerUtils;
 use pocketmine\command\CommandSender;
 use pocketmine\player\Player;
 use pocketmine\utils\TextFormat as C;
@@ -55,8 +55,9 @@ class GiveRCBookSubCommand extends BaseSubCommand {
             if ($name !== null) {
                 if ($amount !== null) {
                     if ($player !== null) {
-                        if ($player->getInventory()->canAddItem(Items::createRCBook($originalGroupName, $amount))) {
-                            $player->getInventory()->addItem(Items::createRCBook($originalGroupName, $amount));
+                        $rcBook = MartianItems::createRCBook($originalGroupName, $amount);
+                        if ($player->getInventory()->canAddItem($rcBook)) {
+                            $player->getInventory()->addItem($rcBook);
                             $sender->sendMessage(C::colorize(str_replace(
                                 [
                                     "{player}", "{amount}", "{group}",

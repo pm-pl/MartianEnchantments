@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace ecstsy\MartianEnchantments\commands\subcommands;
 
-use CortexPE\Commando\BaseSubCommand;
+use ecstsy\MartianEnchantments\libs\CortexPE\Commando\BaseSubCommand;
 use ecstsy\MartianEnchantments\Loader;
 use pocketmine\command\CommandSender;
 use pocketmine\player\Player;
@@ -22,7 +22,9 @@ final class AboutSubCommand extends BaseSubCommand {
             return;
         }
 
-        $sender->sendMessage(TextFormat::colorize("&r&6ME &eVersion: &f" . Loader::getInstance()->getDescription()->getVersion()));
+        $v = Loader::getInstance()->getDescription()->getVersion();
+        $sender->sendMessage(TextFormat::colorize("&r&3&lMartian&bEnchantments&r &8v&7" . $v));
+        $sender->sendMessage(TextFormat::colorize("&7Custom enchantments for &fPocketMine-MP&7."));
     }
 
     public function getPermission(): string

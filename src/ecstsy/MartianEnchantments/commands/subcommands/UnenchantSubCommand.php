@@ -9,6 +9,7 @@ use ecstsy\MartianEnchantments\libs\CortexPE\Commando\BaseSubCommand;
 use ecstsy\MartianEnchantments\enchantments\CustomEnchantment;
 use ecstsy\MartianEnchantments\enchantments\CustomEnchantmentManager;
 use ecstsy\MartianEnchantments\Loader;
+use ecstsy\MartianEnchantments\libs\ecstsy\MartianUtilities\utils\PlayerUtils;
 use pocketmine\command\CommandSender;
 use pocketmine\item\VanillaItems;
 use pocketmine\player\Player;
@@ -40,14 +41,18 @@ final class UnenchantSubCommand extends BaseSubCommand {
                         CustomEnchantmentManager::removeEnchantment($item, $enchantment);
                         $sender->getInventory()->setItemInHand($item);
                         $sender->sendMessage(C::colorize(str_replace("{enchant}", ucfirst($enchantment->getName()), Loader::getInstance()->getLanguageManager()->getNested("commands.main.unenchant.success"))));
+                        PlayerUtils::playSound($sender, "random.anvil_use");
                     } else {
                         $sender->sendMessage(C::colorize(str_replace("{enchant}", ucfirst($enchantment->getName()), Loader::getInstance()->getLanguageManager()->getNested("commands.main.unenchant.does-not-have-enchant"))));
+                        PlayerUtils::playSound($sender, "note.bass");
                     }
                 } else {
                     $sender->sendMessage(C::colorize(Loader::getInstance()->getLanguageManager()->getNested("commands.main.unenchant.not-holding-item")));
+                    PlayerUtils::playSound($sender, "note.bass");
                 }
             } else {
                 $sender->sendMessage(C::colorize(str_replace("{enchant}", $enchant, Loader::getInstance()->getLanguageManager()->getNested("commands.main.unenchant.invalid-enchantment"))));
+                PlayerUtils::playSound($sender, "note.bass");
             }
         }
     }

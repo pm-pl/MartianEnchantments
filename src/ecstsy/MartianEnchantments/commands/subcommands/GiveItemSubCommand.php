@@ -4,127 +4,160 @@ declare(strict_types=1);
 
 namespace ecstsy\MartianEnchantments\commands\subcommands;
 
-use CortexPE\Commando\args\IntegerArgument;
-use CortexPE\Commando\args\RawStringArgument;
-use CortexPE\Commando\BaseSubCommand;
+use ecstsy\MartianEnchantments\enchantments\Groups;
+use ecstsy\MartianEnchantments\libs\CortexPE\Commando\args\IntegerArgument;
+use ecstsy\MartianEnchantments\libs\CortexPE\Commando\args\RawStringArgument;
+use ecstsy\MartianEnchantments\libs\CortexPE\Commando\BaseSubCommand;
 use ecstsy\MartianEnchantments\Loader;
-use ecstsy\MartianEnchantments\utils\Items;
-use ecstsy\MartianUtilities\utils\GeneralUtils;
-use ecstsy\MartianUtilities\utils\PlayerUtils;
+use ecstsy\MartianEnchantments\server\items\MartianItems;
+use ecstsy\MartianEnchantments\utils\ScrollHandler;
+use ecstsy\MartianEnchantments\libs\ecstsy\MartianUtilities\utils\PlayerUtils;
 use pocketmine\command\CommandSender;
 use pocketmine\player\Player;
 use pocketmine\utils\TextFormat as C;
 
 final class GiveItemSubCommand extends BaseSubCommand {
 
-    private $availableItems = [
-        'slotincreaser', 'whitescroll', 'mystery', 'secret', 'magic',
-        'blackscroll', 'randomizer', 'renametag', 'blocktrak', 'fishtrak',
-        'stattrak', 'soultracker', 'mobtrak', 'soulgem', 'transmog',
-        'holywhitescroll', 'orb'
+    /** @var list<string> */
+    private array $availableItems = [
+        "slotincreaser", "whitescroll", "mystery", "secret", "magic",
+        "blackscroll", "randomizer", "renametag", "blocktrak",
+        "stattrak", "soultracker", "mobtrak", "soulgem", "transmog",
+        "holywhitescroll", "orb"
     ];
     
     public function prepare(): void {
         $this->setPermission($this->getPermission());
 
-        $this->setPermissionMessage(Loader::getInstance()->getLanguageManager()->getNested('commands.no-permission'));
+        $this->setPermissionMessage(Loader::getInstance()->getLanguageManager()->getNested("commands.no-permission"));
         $this->registerArgument(0, new RawStringArgument("name", false));
         $this->registerArgument(1, new RawStringArgument("item", false));
         $this->registerArgument(2, new IntegerArgument("amount", false));
 
-        $this->registerArgument(3, new RawStringArgument("extra1", true)); 
-        $this->registerArgument(4, new IntegerArgument("extra2", true)); 
+        $this->registerArgument(3, new RawStringArgument("extra1", true));
+        $this->registerArgument(4, new IntegerArgument("extra2", true));
         $this->registerArgument(5, new IntegerArgument("extra3", true));
     }   
 
     public function onRun(CommandSender $sender, string $aliasUsed, array $args): void
     {
+        $lang = Loader::getInstance()->getLanguageManager();
+        $itemsList = implode(", ", $this->availableItems);
+
         if (!$sender instanceof Player) {
             if (empty($args)) {
-                $sender->sendMessage("Usage: /$aliasUsed <player> <item> [amount] [extra1] [extra2] [extra3]");
-                $sender->sendMessage("&r&fCurrently Available: &7" . implode(", ", $this->availableItems));
+                $message = (string) $lang->getNested("commands.main.giveitem.console", "");
+                if ($message !== "" && $message !== "commands.main.giveitem.console") {
+                    $sender->sendMessage(C::colorize(str_replace("{items}", $itemsList, $message)));
+                } else {
+                    $this->sendUsageLines($sender, $itemsList);
+                }
                 return;
             }           
             return;
         }
 
         if (!isset($args["name"]) && !isset($args["item"]) && !isset($args["amount"])) {
-            $sender->sendMessage(C::colorize(str_replace("{usage}", C::colorize($this->getUsage()), Loader::getInstance()->getLanguageManager()->getNested("commands.invalid-usage"))));
+            $sender->sendMessage(C::colorize(str_replace("{usage}", C::colorize($this->getUsage()), $lang->getNested("commands.invalid-usage"))));
             return;
         }
 
         $player = isset($args["name"]) ? PlayerUtils::getPlayerByPrefix($args["name"]) : null;
-        $amount = isset($args["amount"]) ? $args["amount"] : 1;
-        $item = isset($args["item"]) ? strtolower($args["item"]) : null;
+        $amount = (int) ($args["amount"] ?? 1);
+        $item = isset($args["item"]) ? strtolower((string) $args["item"]) : null;
 
-        if ($player !== null) {
-            if ($player->isOnline()) {
-                if (!in_array($item, $this->availableItems)) {
-                    $sender->sendMessage($this->getUsage());
+        if ($player === null || !$player->isOnline()) {
+            $sender->sendMessage(C::colorize($lang->getNested("commands.offline-player")));
+            return;
+        }
+
+        if ($item === null || !in_array($item, $this->availableItems, true)) {
+            $this->sendUsageLines($sender, $itemsList);
+            return;
+        }
+
+        if ($item === "orb") {
+            if (isset($args["extra1"], $args["extra2"], $args["extra3"])) {
+                $orbType = (string) $args["extra1"];
+                $max = (int) $args["extra2"];
+                $success = (int) $args["extra3"];
+                $orbItem = MartianItems::createOrb($orbType, $max, $success, $amount);
+
+                if ($player->getInventory()->canAddItem($orbItem)) {
+                    $player->getInventory()->addItem($orbItem);
                 } else {
-                    switch ($item) {
-                        case 'orb':
-                            if (isset($args["extra1"]) && isset($args["extra2"]) && isset($args["extra3"])) {
-                                $orbType = $args["extra1"];
-                                $max = $args["extra2"];
-                                $success = $args["extra3"];
-                                $orbItem = Items::createOrb($orbType, $max, $success, $amount);
-
-                                if ($player->getInventory()->canAddItem($orbItem)) {
-                                    $player->getInventory()->addItem($orbItem);
-                                } else {
-                                    $player->getWorld()->dropItem($player->getLocation()->asVector3(), $orbItem);
-                                }
-                                $sender->sendMessage(C::colorize(str_replace(["{player}", "{item}", "{amount}"], [$player->getName(), C::colorize($orbItem->getCustomName()), $amount], Loader::getInstance()->getLanguageManager()->getNested("commands.main.giveitem.success"))));
-                                PlayerUtils::playSound($sender, "random.orb");
-                            } else {
-                                $sender->sendMessage(C::colorize("Usage: /$aliasUsed <player> orb <amount> <orbType> <max> <success>"));
-                            }
-                            break;
-                        case 'randomizer':
-                        case 'secret':
-                            if (isset($args["extra1"])) {
-                                $group = $args["extra1"];
-                                $scrollItem = Items::createScroll($item, $amount, $group);
-
-                                if ($player->getInventory()->canAddItem($scrollItem)) {
-                                    $player->getInventory()->addItem($scrollItem);
-                                } else {
-                                    $player->getWorld()->dropItem($player->getLocation()->asVector3(), $scrollItem);
-                                }
-                                $sender->sendMessage(C::colorize(str_replace(["{player}", "{item}", "{amount}"], [$player->getName(), C::colorize(Items::createScroll($item)->getCustomName()), $amount], Loader::getInstance()->getLanguageManager()->getNested("commands.main.giveitem.success"))));
-                                PlayerUtils::playSound($sender, "random.orb");
-                            } else {
-                                $sender->sendMessage(C::colorize("Usage: /$aliasUsed <player> {$item} <amount> <group>"));
-                            }
-                            break;
-                        default:
-                            $scrollItem = Items::createScroll($item, $amount);
-                            if ($player->getInventory()->canAddItem($scrollItem)) {
-                                $player->getInventory()->addItem($scrollItem);
-                            } else {
-                                $player->getWorld()->dropItem($player->getLocation()->asVector3(), $scrollItem);
-                            }
-                            $sender->sendMessage(C::colorize(str_replace(["{player}", "{item}", "{amount}"], [$player->getName(), C::colorize(Items::createScroll($item)->getCustomName()), $amount], Loader::getInstance()->getLanguageManager()->getNested("commands.main.giveitem.success"))));
-                            PlayerUtils::playSound($sender, "random.orb");
-                            break;
-                    }
+                    $player->getWorld()->dropItem($player->getLocation()->asVector3(), $orbItem);
                 }
+                $sender->sendMessage(C::colorize(str_replace(
+                    ["{player}", "{item}", "{amount}"],
+                    [$player->getName(), C::colorize($orbItem->getCustomName() ?? "Orb"), (string) $amount],
+                    $lang->getNested("commands.main.giveitem.success")
+                )));
+                PlayerUtils::playSound($sender, "random.orb");
+            } else {
+                $this->sendUsageLines($sender, $itemsList);
+            }
+            return;
+        }
+
+        $groupFallback = Groups::getFallbackGroup();
+        $scrollItem = ScrollHandler::createScrollFromGiveItem($item, $amount, $args, $groupFallback);
+
+        if ($scrollItem === null) {
+            if ($item === "randomizer" || $item === "secret") {
+                $sender->sendMessage(C::colorize(str_replace(
+                    ["{player}", "{item}", "{amount}"],
+                    [$player->getName(), $item, (string) $amount],
+                    $lang->getNested("commands.main.giveitem.needs-group")
+                )));
+            } else {
+                $sender->sendMessage(C::colorize($lang->getNested("commands.main.giveitem.failed")));
+            }
+
+            return;
+        }
+
+        if ($player->getInventory()->canAddItem($scrollItem)) {
+            $player->getInventory()->addItem($scrollItem);
+        } else {
+            $player->getWorld()->dropItem($player->getLocation()->asVector3(), $scrollItem);
+        }
+        $display = $scrollItem->getCustomName();
+        if ($display === null || $display === "") {
+            $display = $scrollItem->getName();
+        }
+        $sender->sendMessage(C::colorize(str_replace(
+            ["{player}", "{item}", "{amount}"],
+            [$player->getName(), C::colorize($display), (string) $amount],
+            $lang->getNested("commands.main.giveitem.success")
+        )));
+        PlayerUtils::playSound($sender, "random.orb");
+    }
+
+    private function sendUsageLines(CommandSender $sender, string $itemsList): void {
+        $lang = Loader::getInstance()->getLanguageManager();
+        $lines = $lang->getNested("commands.main.giveitem.usage-lines");
+        if (is_array($lines)) {
+            foreach ($lines as $line) {
+                $text = (string) $line;
+                if (str_contains($text, "{items}")) {
+                    $text = str_replace("{items}", $itemsList, $text);
+                }
+                $sender->sendMessage(C::colorize($text));
             }
         } else {
-            $sender->sendMessage(C::colorize(Loader::getInstance()->getLanguageManager()->getNested("commands.offline-player")));
+            $sender->sendMessage(C::colorize("/me giveitem <player> <item> <count> [extras] | " . $itemsList));
         }
     }
 
     public function getUsage(): string
     {
-        $messages = [
-            "/me giveitem <player> <item> <count> <group/soul count/success for blackscroll/preset tracker amount>",
-            "&r&fCurrently Available: &7" . implode(", ", $this->availableItems)
-        ];
+        $lang = Loader::getInstance()->getLanguageManager();
 
-        $message = implode("\n", $messages);
-        return C::colorize($message);
+        return C::colorize((string) $lang->getNested(
+            "commands.main.giveitem.usage-one-liner",
+            "&c/me giveitem <player> <item> <amount> [extras] &8- See &f/me help &cfor item types."
+        ));
     }
 
     public function getPermission(): string

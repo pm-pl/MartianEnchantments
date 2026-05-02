@@ -1,4 +1,4 @@
-# Enchantment groups are used for enchanter, to sell specific type books. You can group them
+# Enchantment groups (enchanter / books): group enchants and give each group a color.
 # and give each group global color.
 # YOU CAN DELETE THESE GROUPS AND CREATE YOUR OWN
 settings:
